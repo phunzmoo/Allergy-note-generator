@@ -1,0 +1,3196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pharmacist Allergy Note Generator — โรงพยาบาลพระนครศรีอยุธยา</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --surface: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --line: #e5e2da;
+    --accent: #b91c4d;       /* deep rose */
+    --accent-soft: #fce7ee;
+    --gold: #b08d3c;
+    --warn: #c2410c;
+    --warn-bg: #fff1e6;
+    --severe: #7f1d1d;
+    --severe-bg: #fee2e2;
+    --ok: #166534;
+    --ok-bg: #dcfce7;
+  }
+  * { font-family: 'Sarabun', system-ui, sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+  .sheet {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 12px 40px -16px rgba(0,0,0,0.08);
+  }
+  .label-th {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .field {
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.55rem 0.75rem;
+    width: 100%;
+    font-size: 0.95rem;
+    color: #000;
+    transition: all 0.15s;
+  }
+  .field::placeholder {
+    color: #b5b1a8;
+    font-weight: 300;
+    font-style: normal;
+    opacity: 1;
+  }
+  .field:hover {
+    border-color: #c9c4b6;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .btn {
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent); }
+  .btn-secondary {
+    background: #fff;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-secondary:hover { background: #f3f1ec; border-color: var(--ink); }
+  .btn-accent {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-accent:hover { background: #99183f; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink-soft);
+  }
+  .btn-ghost:hover { color: var(--accent); background: var(--accent-soft); }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .severity-mild    { color: var(--ok); background: var(--ok-bg); border-color: #86efac; }
+  .severity-moderate{ color: var(--warn); background: var(--warn-bg); border-color: #fdba74; }
+  .severity-severe  { color: var(--severe); background: var(--severe-bg); border-color: #fca5a5; }
+
+  .severe-banner {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 8px 24px -8px rgba(127,29,29,0.4);
+  }
+
+  /* Searchable dropdown */
+  .combo {
+    position: relative;
+  }
+  .combo-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 50;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.18);
+  }
+  .combo-item {
+    padding: 0.55rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f1ec;
+    font-size: 0.9rem;
+  }
+  .combo-item:hover, .combo-item.highlighted {
+    background: var(--accent-soft);
+  }
+  .combo-item .group-tag {
+    font-size: 0.7rem;
+    color: var(--accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* ============================================================
+     PRINT / PDF — A4 portrait, exact spacing, stable header
+     ============================================================ */
+  /* ============================================================
+     PRINT / PDF — fixed A4 layout (stable across screen + print + PDF)
+     ============================================================ */
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  @media print {
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 210mm !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      height: auto !important;
+    }
+    /* Hide all top-level non-print elements */
+    body > header,
+    body > #dashboardModal,
+    body > #toast { display: none !important; }
+    /* Inside main: hide all sections (left form column) */
+    body > main > section { display: none !important; }
+    /* Inside aside (right column): hide everything except the printable wrapper */
+    body > main > aside > *:not(.printable-wrapper) { display: none !important; }
+    /* Make main and aside flow as block */
+    body > main {
+      display: block !important;
+      max-width: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    body > main > aside {
+      display: block !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      position: static !important;
+    }
+    /* The printable wrapper - keep visible but strip styling */
+    .printable-wrapper {
+      display: block !important;
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: visible !important;
+    }
+    .printable-wrapper > #tab-form {
+      display: block !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    .no-print { display: none !important; }
+    /* The actual print sheet — exact A4 printable area */
+    .print-sheet {
+      display: block !important;
+      width: 182mm !important;
+      max-width: 182mm !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+      transform: none !important;
+      zoom: 1 !important;
+      background: #fff !important;
+      position: static !important;
+    }
+    .print-sheet h2 { page-break-after: avoid; }
+    .print-row, .adr-block, .print-header { page-break-inside: avoid; }
+  }
+
+  /* ============================================================
+     PRINT SHEET — identical rendering on screen, print & PDF
+     Uses px-only sizing so html2pdf scales predictably.
+     ============================================================ */
+  .print-sheet {
+    background: #fff;
+    color: #000;
+    padding: 24px 32px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    border: 1px solid var(--line);
+    box-sizing: border-box;
+    /* Lock width — html2pdf renders at this width regardless of viewport */
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    /* Prevent any inherited transform/scale from parent layout */
+    transform: none;
+    -webkit-transform: none;
+    /* Stable Thai font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1;
+  }
+  /* All descendants inherit black ink, no grey leak from app theme */
+  .print-sheet,
+  .print-sheet *,
+  .print-sheet *::before,
+  .print-sheet *::after {
+    color: #000 !important;
+    box-sizing: border-box;
+  }
+
+  /* HEADER — locked, centered, no flex parent for stable alignment */
+  .print-header {
+    display: block;
+    text-align: center;
+    width: 100%;
+    margin: 0 0 10px 0;
+    padding: 0;
+  }
+  .print-sheet h1 {
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    margin: 0 0 2px 0;
+    padding: 0;
+    line-height: 1.3;
+    letter-spacing: 0;
+  }
+  .print-subtitle {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 400;
+    margin: 0 0 6px 0;
+    padding: 0;
+    line-height: 1.3;
+  }
+  .print-divider {
+    width: 100%;
+    height: 0;
+    border-top: 1px solid #000;
+    margin: 0 0 10px 0;
+  }
+  .print-sheet h2 {
+    font-size: 13px;
+    font-weight: 700;
+    margin: 12px 0 6px 0;
+    padding: 0 0 2px 0;
+    border-bottom: 1px solid #666;
+    line-height: 1.3;
+    page-break-after: avoid;
+  }
+
+  /* Field rows — table-based for stable alignment in print/PDF
+     (flexbox + html2pdf has historical alignment issues) */
+  .print-row {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    margin: 0 0 5px 0;
+    line-height: 1.5;
+    flex-wrap: nowrap;
+  }
+  .print-label {
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+  .print-line {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-bottom: 1px dotted #666;
+    padding: 0 4px 1px 4px;
+    line-height: 1.5;
+    min-height: 17px;
+    /* Wrap long content instead of overflowing */
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  /* When a print-line is set to fixed width via inline style, keep it from collapsing */
+  .print-line[style*="width"] {
+    flex: 0 0 auto;
+  }
+  .adr-block {
+    margin-bottom: 7px;
+    page-break-inside: avoid;
+  }
+  .adr-extra {
+    padding-left: 14px;
+    font-size: 11px;
+    margin-top: 1px;
+    line-height: 1.4;
+  }
+  .print-checkbox-row {
+    margin: 5px 0;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .print-signature {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 22px;
+  }
+  .print-signature > div { text-align: left; }
+
+  /* Decorative */
+  .accent-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--gold) 100%);
+  }
+  .num-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 0.5rem;
+  }
+  .drug-row {
+    border-left: 3px solid var(--line);
+    transition: border-color 0.2s;
+  }
+  .drug-row.has-data { border-left-color: var(--accent); }
+  .drug-row.severe { border-left-color: var(--severe); background: linear-gradient(90deg, #fff5f5 0%, transparent 50%); }
+
+  /* Tab nav */
+  .tab {
+    padding: 0.6rem 1rem;
+    border-bottom: 2px solid transparent;
+    color: var(--ink-soft);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--ink);
+    color: #fff;
+    padding: 0.7rem 1.2rem;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.3);
+    z-index: 100;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ================= HEADER ================= -->
+<header class="no-print border-b border-[var(--line)] bg-white sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="w-10 h-10 rounded bg-[var(--ink)] text-white grid place-items-center font-bold text-lg">℞</div>
+      <div>
+        <h1 class="font-bold text-base leading-tight">Pharmacist Allergy Note Generator</h1>
+        <p class="text-xs text-[var(--ink-soft)]">โรงพยาบาลพระนครศรีอยุธยา · ห้องยาผู้ป่วยใน</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btnDashboard" class="btn btn-ghost text-sm">📊 Dashboard</button>
+      <button id="btnSaveDraft" class="btn btn-ghost text-sm">💾 บันทึก draft</button>
+      <button id="btnLoadDraft" class="btn btn-ghost text-sm">📂 โหลด draft</button>
+      <button id="btnReset" class="btn btn-ghost text-sm">🗑 ล้างฟอร์ม</button>
+    </div>
+  </div>
+  <div class="accent-bar"></div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-6 grid lg:grid-cols-5 gap-6">
+
+  <!-- ================= LEFT: FORM ================= -->
+  <section class="lg:col-span-3 space-y-5">
+
+    <!-- Patient Info -->
+    <div class="sheet rounded-lg p-5">
+      <div class="flex items-center mb-4">
+        <span class="num-badge">1</span>
+        <h2 class="font-bold text-lg">ข้อมูลผู้ป่วย</h2>
+      </div>
+      <div class="grid grid-cols-12 gap-3">
+        <div class="col-span-4">
+          <label class="label-th">HN</label>
+          <input type="text" id="hn" class="field mono" placeholder="—">
+        </div>
+        <div class="col-span-4">
+          <label class="label-th">AN</label>
+          <input type="text" id="an" class="field mono" placeholder="—">
+        </div>
+        <div class="col-span-4">
+          <label class="label-th">อายุ</label>
+          <input type="text" id="age" class="field" placeholder="—">
+        </div>
+        <div class="col-span-8">
+          <label class="label-th">ชื่อ-นามสกุล</label>
+          <input type="text" id="name" class="field" placeholder="—">
+        </div>
+        <div class="col-span-4">
+          <label class="label-th">Ward / ตึก</label>
+          <input type="text" id="ward" class="field" placeholder="—">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">แหล่งข้อมูล</label>
+          <select id="source" class="field">
+            <option value="ผู้ป่วย">ผู้ป่วย</option>
+            <option value="ญาติ">ญาติ</option>
+            <option value="โทรศัพท์">โทรศัพท์</option>
+            <option value="ประวัติเดิมจาก Hom-c" selected>ประวัติเดิมจาก Hom-c</option>
+            <option value="อื่นๆ">อื่นๆ</option>
+          </select>
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">วันที่ประเมิน</label>
+          <input type="date" id="evalDate" class="field">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">นศภ. ผู้ประเมินเคส <span class="text-[10px] font-normal text-[var(--ink-soft)]">(optional)</span></label>
+          <input type="text" id="student" class="field" placeholder="—" autocomplete="off">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">เภสัชกรผู้ประเมิน</label>
+          <div class="combo">
+            <input type="text" id="pharmacist" class="field" placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ" autocomplete="off">
+            <div class="combo-list hidden" id="pharmacistList"></div>
+          </div>
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">ช่วงการประเมิน <span class="text-[10px] font-normal text-[var(--accent)]">★ ใช้คำนวณ P4P</span></label>
+          <select id="shift" class="field">
+            <option value="ในเวลา">ในเวลา (P4P)</option>
+            <option value="นอกเวลา (วันธรรมดา)">นอกเวลา (วันธรรมดา)</option>
+            <option value="นอกเวลา (วันหยุด)">นอกเวลา (วันหยุด)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Allergy Card Info -->
+    <div class="sheet rounded-lg p-5">
+      <div class="flex items-center mb-4">
+        <span class="num-badge">2</span>
+        <h2 class="font-bold text-lg">ข้อมูลบัตรแพ้ยา</h2>
+      </div>
+      <div class="grid grid-cols-12 gap-3">
+        <div class="col-span-12">
+          <label class="label-th">เคยมีบัตรแพ้ยาหรือไม่</label>
+          <div class="flex flex-wrap gap-2 mt-1">
+            <label class="chip cursor-pointer"><input type="radio" name="hasCard" value="มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย" class="mr-1"> มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย</label>
+            <label class="chip cursor-pointer"><input type="radio" name="hasCard" value="มีบัตรอยู่เดิม แต่ไม่ได้นำมา" class="mr-1"> มีบัตรอยู่เดิม แต่ไม่ได้นำมา</label>
+            <label class="chip cursor-pointer"><input type="radio" name="hasCard" value="เคยมีบัตร แต่ชำรุด/หาย — ออกบัตรให้ใหม่" class="mr-1"> เคยมีบัตร แต่ชำรุด/หาย</label>
+            <label class="chip cursor-pointer"><input type="radio" name="hasCard" value="ไม่เคยมีบัตร — ออกบัตรให้ใหม่" class="mr-1"> ไม่เคยมีบัตร</label>
+          </div>
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">เลขที่บัตรแพ้ยา</label>
+          <input type="text" id="cardNo" class="field mono" placeholder="—">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">ประเภทบัตรแพ้ยา</label>
+          <select id="cardType" class="field">
+            <option value="">—</option>
+            <option>บัตรแพ้ยา</option>
+            <option>บัตรเตือนการใช้ยา</option>
+            <option>บัตรแพ้ยา + บัตรเตือน</option>
+          </select>
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">โรงพยาบาลที่ออกบัตร</label>
+          <input type="text" id="cardHospital" class="field" placeholder="—">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">วันที่ออกบัตร</label>
+          <input type="date" id="cardIssueDate" class="field">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">วันที่เกิดอาการแพ้ยา</label>
+          <input type="text" id="adrOnsetDate" class="field" placeholder="—">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">ผู้ประเมิน ADR เดิม</label>
+          <input type="text" id="prevEvaluator" class="field" placeholder="—">
+        </div>
+      </div>
+    </div>
+
+    <!-- Drug Allergy List -->
+    <div class="sheet rounded-lg p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center">
+          <span class="num-badge">3</span>
+          <h2 class="font-bold text-lg">รายการยาที่แพ้ / ADR</h2>
+        </div>
+        <div class="text-xs text-[var(--ink-soft)]">เพิ่ม/ลบรายการได้ตามต้องการ</div>
+      </div>
+
+      <!-- Frequently used drugs -->
+      <div class="mb-4">
+        <div class="label-th mb-2">ยาที่พบบ่อย — กดเพื่อเพิ่มอย่างรวดเร็ว</div>
+        <div class="flex flex-wrap gap-1.5" id="quickDrugs"></div>
+      </div>
+
+      <div id="drugList" class="space-y-3"></div>
+
+      <button id="btnAddDrug" class="mt-3 btn btn-secondary w-full">
+        + เพิ่มรายการยา
+      </button>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="sheet rounded-lg p-5">
+      <div class="flex items-center mb-4">
+        <span class="num-badge">4</span>
+        <h2 class="font-bold text-lg">คำแนะนำการใช้ยา</h2>
+      </div>
+
+      <div id="severeWarning" class="severe-banner mb-4 hidden">
+        <div class="flex items-start gap-3">
+          <span class="text-2xl">⚠️</span>
+          <div>
+            <div class="font-bold text-base">SEVERE REACTION DETECTED</div>
+            <div class="text-sm opacity-90 mt-1" id="severeMsg"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="label-th">แนะนำหลีกเลี่ยงการใช้ยา</label>
+            <button id="btnAutoAvoid" class="text-xs text-[var(--accent)] font-semibold hover:underline">↻ สร้างอัตโนมัติ</button>
+          </div>
+          <textarea id="recAvoid" rows="3" class="field" placeholder="ระบบจะสร้างคำแนะนำอัตโนมัติ — แก้ไขได้ตามต้องการ"></textarea>
+        </div>
+        <div>
+          <label class="label-th">แนะนำระวังการใช้ยา</label>
+          <textarea id="recCaution" rows="2" class="field" placeholder="—"></textarea>
+        </div>
+        <div>
+          <label class="label-th">ยาข้างเคียง / ทางเลือกที่สามารถใช้ได้</label>
+          <textarea id="recAlt" rows="2" class="field" placeholder="—"></textarea>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ================= RIGHT: PREVIEW ================= -->
+  <aside class="lg:col-span-2 space-y-4">
+
+    <!-- Action bar -->
+    <div class="sheet rounded-lg p-4 sticky top-[88px]">
+      <div class="flex flex-wrap gap-2">
+        <button id="btnExportPdf" class="btn btn-accent flex-1">📄 Export PDF</button>
+        <button id="btnPrint" class="btn btn-primary flex-1">🖨 พิมพ์</button>
+        <button id="btnCopyNote" class="btn btn-secondary flex-1">📋 คัดลอก</button>
+      </div>
+      <div class="text-xs text-[var(--ink-soft)] mt-2 text-center" id="autoStatus">เริ่มกรอกข้อมูลเพื่อสร้าง note</div>
+    </div>
+
+    <!-- Tab: preview -->
+    <div class="sheet rounded-lg overflow-hidden printable-wrapper">
+      <div class="flex border-b border-[var(--line)] px-2 no-print">
+        <div class="tab active" data-tab="form">📋 แบบฟอร์ม (สำหรับพิมพ์)</div>
+        <div class="tab" data-tab="note">✍️ Quick Note</div>
+      </div>
+
+      <div id="tab-form" class="tab-content">
+        <div id="printArea" class="print-sheet">
+          <!-- Auto-rendered preview -->
+        </div>
+      </div>
+
+      <div id="tab-note" class="tab-content hidden p-5 no-print">
+        <div class="label-th mb-2">Pharmacist's Note (สำหรับวางใน HIS)</div>
+        <textarea id="quickNote" rows="14" class="field text-sm leading-relaxed"></textarea>
+        <button id="btnCopyQuick" class="btn btn-secondary w-full mt-3">📋 คัดลอก Quick Note</button>
+      </div>
+    </div>
+
+    <!-- Cross-reactivity reference panel -->
+    <div class="sheet rounded-lg p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="font-bold text-sm">📚 Cross-reactivity Reference</div>
+        <button id="btnRefToggle" class="text-xs text-[var(--accent)] font-semibold">แสดง/ซ่อน</button>
+      </div>
+      <div id="refPanel" class="text-xs space-y-2 text-[var(--ink-soft)] hidden">
+        <p><b class="text-[var(--ink)]">Penicillins:</b> Penicillin ↔ Amoxicillin ↔ Ampicillin ↔ Cephalexin (R1 side chain เหมือน Amox)</p>
+        <p><b class="text-[var(--ink)]">Cephalosporins (R1 group):</b> Cefuroxime ↔ Cefoxitin / Cefotaxime ↔ Ceftriaxone ↔ Ceftazidime</p>
+        <p><b class="text-[var(--ink)]">Sulfa ATB:</b> Bactrim, Sulfasalazine, Sulfadiazine</p>
+        <p><b class="text-[var(--ink)]">Conv. NSAIDs (COX-1):</b> Aspirin, Ibuprofen, Diclofenac, Naproxen, Indomethacin, Mefenamic acid, Piroxicam</p>
+        <p><b class="text-[var(--ink)]">Fluoroquinolones:</b> Ciprofloxacin, Levofloxacin, Norfloxacin, Ofloxacin, Moxifloxacin</p>
+        <p><b class="text-[var(--ink)]">Aromatic anticonvulsants:</b> Phenytoin, Carbamazepine, Phenobarbital, Lamotrigine, Oxcarbazepine</p>
+        <p><b class="text-[var(--ink)]">Lincosamides:</b> Clindamycin ↔ Lincomycin</p>
+        <p><b class="text-[var(--ink)]">Tetracyclines:</b> Tetracycline ↔ Doxycycline ↔ Minocycline</p>
+        <p class="pt-2 border-t border-[var(--line)] text-[11px] italic">* SJS/TEN/DRESS/AGEP/Anaphylaxis → หลีกเลี่ยงทั้งกลุ่ม</p>
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<!-- ================= DASHBOARD MODAL ================= -->
+<div id="dashboardModal" class="no-print fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" style="align-items:flex-start">
+  <div class="sheet rounded-lg max-w-6xl w-full my-8 max-h-[94vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-5 border-b border-[var(--line)] sticky top-0 bg-white z-10">
+      <div>
+        <h2 class="font-bold text-lg">📊 P4P Dashboard & ADR Statistics</h2>
+        <p class="text-xs text-[var(--ink-soft)] mt-1">บันทึกอัตโนมัติทุกครั้งที่ Save / Export PDF / Copy Note</p>
+      </div>
+      <button id="btnDashboardClose" class="btn btn-ghost text-lg">✕</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="px-5 py-3 bg-[#fafaf7] border-b border-[var(--line)] flex flex-wrap gap-3 items-end">
+      <div>
+        <div class="label-th mb-1">ช่วงเวลา</div>
+        <select id="filterScope" class="field" style="width:auto;min-width:140px">
+          <option value="month">รายเดือน</option>
+          <option value="year">รายปี</option>
+          <option value="all">ทั้งหมด</option>
+        </select>
+      </div>
+      <div id="filterMonthWrap">
+        <div class="label-th mb-1">เดือน</div>
+        <input type="month" id="filterMonth" class="field" style="width:auto;min-width:160px">
+      </div>
+      <div id="filterYearWrap" class="hidden">
+        <div class="label-th mb-1">ปี</div>
+        <select id="filterYear" class="field" style="width:auto;min-width:100px"></select>
+      </div>
+      <div>
+        <div class="label-th mb-1">เภสัชกร</div>
+        <select id="filterPharmacist" class="field" style="width:auto;min-width:160px">
+          <option value="">ทั้งหมด</option>
+        </select>
+      </div>
+      <div>
+        <div class="label-th mb-1">ช่วงการประเมิน</div>
+        <select id="filterShift" class="field" style="width:auto;min-width:140px">
+          <option value="">ทั้งหมด</option>
+          <option value="inTime">★ ในเวลา (P4P)</option>
+          <option value="offTime">นอกเวลา</option>
+        </select>
+      </div>
+      <div class="flex-1"></div>
+      <button id="btnFilterReset" class="btn btn-ghost text-sm">↻ Reset</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-[var(--line)] px-5">
+      <div class="tab active" data-dtab="overview">📈 Overview</div>
+      <div class="tab" data-dtab="pharmacist">👥 By Pharmacist</div>
+      <div class="tab" data-dtab="drugs">💊 ADR Drug Stats</div>
+      <div class="tab" data-dtab="cases">📋 Cases</div>
+    </div>
+
+    <div class="p-5">
+
+      <!-- TAB: OVERVIEW -->
+      <div id="dtab-overview" class="dtab-content space-y-5">
+        <!-- Smart summary -->
+        <div id="smartSummary" class="border-l-4 border-[var(--accent)] bg-[var(--accent-soft)] px-4 py-3 rounded text-sm leading-relaxed"></div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">Total Cases</div>
+            <div class="text-3xl font-bold mt-1" id="statTotal">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1" id="statTotalSub">—</div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">Severe ADR</div>
+            <div class="text-3xl font-bold mt-1 text-[var(--severe)]" id="statSevere">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1" id="statSevereSub">—</div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">ADR Entries</div>
+            <div class="text-3xl font-bold mt-1" id="statDrugs">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1">รายการยาทั้งหมด</div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">ผู้ป่วยใหม่ (HN ไม่ซ้ำ)</div>
+            <div class="text-3xl font-bold mt-1 text-[var(--accent)]" id="statUniqueHN">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1" id="statThisMonth">—</div>
+          </div>
+        </div>
+
+        <!-- P4P / Shift breakdown -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="border border-[var(--accent)] bg-[var(--accent-soft)] rounded-lg p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">★ P4P Eligible (ในเวลา)</div>
+            <div class="text-3xl font-bold mt-1 text-[var(--accent)]" id="statP4P">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1">นับเข้า P4P / 1 encounter = 1 case</div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">ในเวลา</div>
+            <div class="text-2xl font-bold mt-1" id="statInTime">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1">workday-hours</div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="text-xs text-[var(--ink-soft)] font-semibold uppercase tracking-wide">นอกเวลา</div>
+            <div class="text-2xl font-bold mt-1" id="statOffTime">0</div>
+            <div class="text-[11px] text-[var(--ink-soft)] mt-1">ไม่นับ P4P / ยังเก็บสถิติ</div>
+          </div>
+        </div>
+
+        <!-- Trend chart -->
+        <div class="border border-[var(--line)] rounded-lg p-4">
+          <div class="font-semibold text-sm mb-3">📈 Trend รายเดือน</div>
+          <div style="position:relative;height:240px"><canvas id="chartTrend"></canvas></div>
+        </div>
+
+        <!-- 2-col charts -->
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="font-semibold text-sm mb-3">🔥 Top 10 ยาที่แพ้บ่อย</div>
+            <div style="position:relative;height:280px"><canvas id="chartTopDrugs"></canvas></div>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg p-4">
+            <div class="font-semibold text-sm mb-3">📊 Severity Mix</div>
+            <div style="position:relative;height:280px"><canvas id="chartSeverity"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: BY PHARMACIST -->
+      <div id="dtab-pharmacist" class="dtab-content hidden space-y-5">
+        <div class="border border-[var(--line)] rounded-lg p-4">
+          <div class="font-semibold text-sm mb-3">📊 เคสตามเภสัชกร</div>
+          <div style="position:relative;height:280px"><canvas id="chartPharmacist"></canvas></div>
+        </div>
+        <div class="border border-[var(--line)] rounded-lg overflow-hidden">
+          <div class="bg-[#fafaf7] px-3 py-2 font-semibold text-sm border-b border-[var(--line)]">รายละเอียด workload (P4P นับเฉพาะ "ในเวลา")</div>
+          <table class="w-full text-sm">
+            <thead class="text-xs text-[var(--ink-soft)]">
+              <tr class="border-b border-[var(--line)]">
+                <th class="py-2 px-3 text-left">เภสัชกร</th>
+                <th class="py-2 px-3 text-right">Total</th>
+                <th class="py-2 px-3 text-right text-[var(--accent)]">★ P4P</th>
+                <th class="py-2 px-3 text-right">นอกเวลา</th>
+                <th class="py-2 px-3 text-right">ADR Entries</th>
+                <th class="py-2 px-3 text-right">Severe</th>
+              </tr>
+            </thead>
+            <tbody id="statByPharmacist"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: ADR DRUG STATS -->
+      <div id="dtab-drugs" class="dtab-content hidden space-y-5">
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="border border-[var(--line)] rounded-lg overflow-hidden">
+            <div class="bg-[#fafaf7] px-3 py-2 font-semibold text-sm border-b border-[var(--line)]">ยาที่ผู้ป่วยแจ้งแพ้ (รายตัว)</div>
+            <table class="w-full text-sm">
+              <thead class="text-xs text-[var(--ink-soft)]">
+                <tr class="border-b border-[var(--line)]">
+                  <th class="py-2 px-3 text-left">ชื่อยา</th>
+                  <th class="py-2 px-3 text-right">เคส</th>
+                  <th class="py-2 px-3 text-right">Severe</th>
+                </tr>
+              </thead>
+              <tbody id="statByDrug"></tbody>
+            </table>
+          </div>
+          <div class="border border-[var(--line)] rounded-lg overflow-hidden">
+            <div class="bg-[#fafaf7] px-3 py-2 font-semibold text-sm border-b border-[var(--line)]">กลุ่มยาที่ผู้ป่วยแจ้งแพ้</div>
+            <table class="w-full text-sm">
+              <thead class="text-xs text-[var(--ink-soft)]">
+                <tr class="border-b border-[var(--line)]">
+                  <th class="py-2 px-3 text-left">กลุ่มยา</th>
+                  <th class="py-2 px-3 text-right">เคส</th>
+                  <th class="py-2 px-3 text-right">Severe</th>
+                </tr>
+              </thead>
+              <tbody id="statByDrugGroup"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="border border-[var(--line)] rounded-lg overflow-hidden">
+          <div class="bg-[#fafaf7] px-3 py-2 font-semibold text-sm border-b border-[var(--line)]">ประเภท Reaction</div>
+          <table class="w-full text-sm">
+            <thead class="text-xs text-[var(--ink-soft)]">
+              <tr class="border-b border-[var(--line)]">
+                <th class="py-2 px-3 text-left">Reaction</th>
+                <th class="py-2 px-3 text-right">จำนวน</th>
+              </tr>
+            </thead>
+            <tbody id="statTopReactions"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: CASES -->
+      <div id="dtab-cases" class="dtab-content hidden">
+        <div class="border border-[var(--line)] rounded-lg overflow-hidden">
+          <div class="bg-[#fafaf7] px-3 py-2 font-semibold text-sm border-b border-[var(--line)] flex justify-between items-center">
+            <span>รายการเคสทั้งหมด (filtered)</span>
+            <span class="text-xs text-[var(--ink-soft)]" id="caseCount">0 cases</span>
+          </div>
+          <div class="max-h-[60vh] overflow-y-auto">
+            <table class="w-full text-sm">
+              <thead class="text-xs text-[var(--ink-soft)] sticky top-0 bg-white z-10">
+                <tr class="border-b border-[var(--line)]">
+                  <th class="py-2 px-2 text-left">วันที่</th>
+                  <th class="py-2 px-2 text-center">P4P</th>
+                  <th class="py-2 px-2 text-left">HN</th>
+                  <th class="py-2 px-2 text-left">AN</th>
+                  <th class="py-2 px-2 text-left">ชื่อ</th>
+                  <th class="py-2 px-2 text-left">Ward</th>
+                  <th class="py-2 px-2 text-left">ยาที่แพ้</th>
+                  <th class="py-2 px-2 text-left">นศภ.</th>
+                  <th class="py-2 px-2 text-left">เภสัชกร</th>
+                  <th class="py-2 px-2 text-center">⚠️</th>
+                  <th class="py-2 px-2"></th>
+                </tr>
+              </thead>
+              <tbody id="statCases"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-wrap gap-2 mt-5 pt-4 border-t border-[var(--line)]">
+        <button id="btnRecordManually" class="btn btn-secondary">➕ บันทึกเคสปัจจุบัน</button>
+        <div class="border-l border-[var(--line)] mx-1"></div>
+        <button id="btnExportCSV" class="btn btn-primary">📤 Export CSV (cases)</button>
+        <button id="btnExportXLS" class="btn btn-primary">📊 Export Excel (cases)</button>
+        <button id="btnExportPivot" class="btn btn-primary">📊 Export Pivot Excel</button>
+        <div class="flex-1"></div>
+        <button id="btnPrintDashboard" class="btn btn-ghost text-sm">🖨 พิมพ์ dashboard</button>
+        <button id="btnClearStats" class="btn btn-ghost text-red-600">🗑 ลบข้อมูลทั้งหมด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PHARMACIST MANAGER MODAL ================= -->
+<div id="pharmManagerModal" class="no-print fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="sheet rounded-lg max-w-md w-full">
+    <div class="flex items-center justify-between p-4 border-b border-[var(--line)]">
+      <h2 class="font-bold text-base">⚙️ จัดการรายชื่อเภสัชกร</h2>
+      <button id="btnPharmManagerClose" class="btn btn-ghost text-lg">✕</button>
+    </div>
+    <div class="p-4 space-y-3">
+      <div class="flex gap-2">
+        <input id="pharmManagerNew" class="field flex-1" placeholder="พิมพ์ชื่อเภสัชกรใหม่..." autocomplete="off">
+        <button id="btnPharmManagerAdd" class="btn btn-primary whitespace-nowrap">+ เพิ่ม</button>
+      </div>
+      <div class="border border-[var(--line)] rounded max-h-72 overflow-y-auto" id="pharmManagerList"></div>
+      <div class="flex justify-end pt-2 border-t border-[var(--line)]">
+        <button id="btnPharmManagerReset" class="btn btn-ghost text-xs">↻ คืนค่ารายชื่อเริ่มต้น</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- ================= JAVASCRIPT ================= -->
+<script>
+/* ============================================================
+   PHARMACIST REGISTRY
+   Editable list stored in localStorage. Used by searchable dropdown.
+   ============================================================ */
+const PHARMACISTS_KEY = 'pharmAllergyPharmacists';
+const DEFAULT_PHARMACISTS = [
+  'เยาวลักษณ์ สิทธิเดช',
+  'สุชีรา ทนงศักดิ์วิเศษ',
+  'ธนพร ปลอดภัย',
+  'ณัฐวีร์ แก้วรัตนปัทมา',
+  'พงษ์ศธร เงินพรหม',
+  'ตวงภรณ์ ปุณณะเวส',
+];
+
+const PharmacistRegistry = {
+  list() {
+    try {
+      const raw = localStorage.getItem(PHARMACISTS_KEY);
+      if (!raw) return [...DEFAULT_PHARMACISTS];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...DEFAULT_PHARMACISTS];
+    } catch(e) { return [...DEFAULT_PHARMACISTS]; }
+  },
+  save(arr) { localStorage.setItem(PHARMACISTS_KEY, JSON.stringify(arr)); },
+  add(name) {
+    name = name.trim();
+    if (!name) return false;
+    const arr = this.list();
+    if (arr.some(n => n.toLowerCase() === name.toLowerCase())) return false;
+    arr.push(name);
+    arr.sort((a,b) => a.localeCompare(b, 'th'));
+    this.save(arr);
+    return true;
+  },
+  remove(name) {
+    const arr = this.list().filter(n => n !== name);
+    this.save(arr);
+  },
+  reset() {
+    this.save([...DEFAULT_PHARMACISTS]);
+  }
+};
+
+/* ============================================================
+   DRUG DATABASE
+   ============================================================ */
+// AYH Drug List - 250 unique generic items (merged duplicates from บัญชียาโรงพยาบาลพระนครศรีอยุธยา 1,098 items)
+const DRUG_DB = [
+  { name: "Amoxicillin", group: "penicillin", aliases: ["Amox", "Amoxy", "อะม็อก"] },
+  { name: "Amoxicillin + Clavulanic acid", group: "penicillin", aliases: ["Augmentin", "Manclamine ES", "Co-amoxiclav", "ออคเมนติน"] },
+  { name: "Ampicillin", group: "penicillin", aliases: ["Amp"] },
+  { name: "Cloxacillin", group: "penicillin", aliases: ["Clox"] },
+  { name: "Dicloxacillin", group: "penicillin", aliases: ["Diclox", "Dicloxa"] },
+  { name: "Penicillin G", group: "penicillin", aliases: ["Pen G"] },
+  { name: "Penicillin G benzathine", group: "penicillin", aliases: ["Penadur LA"] },
+  { name: "Penicillin V", group: "penicillin", aliases: ["Pen V"] },
+  { name: "Piperacillin + Tazobactam", group: "penicillin", aliases: ["Tazocin", "Pip-tazo"] },
+  { name: "Cephalexin", group: "ceph_amox", aliases: ["Keflex"] },
+  { name: "Cefazolin", group: "ceph_1", aliases: ["Cefazol", "Cef-1"] },
+  { name: "Cefuroxime", group: "ceph_zin", aliases: ["Zinnat", "Zinacef"] },
+  { name: "Cefoxitin", group: "ceph_zin", aliases: ["Cefoxin", "Mefoxin"] },
+  { name: "Cefotaxime", group: "ceph_3", aliases: ["Claforan"] },
+  { name: "Ceftriaxone", group: "ceph_3", aliases: ["Cef-3", "Cef3", "Rocephin"] },
+  { name: "Ceftazidime", group: "ceph_3", aliases: ["Fortum", "Ceftaz"] },
+  { name: "Ceftazidime + Avibactam", group: "ceph_3", aliases: ["Zavicefta"] },
+  { name: "Cefoperazone + Sulbactam", group: "ceph_other", aliases: ["Sulperazon"] },
+  { name: "Cefdinir", group: "ceph_other", aliases: ["Omnicef", "Cednir"] },
+  { name: "Cefixime", group: "ceph_other", aliases: ["Cefspan"] },
+  { name: "Co-Trimoxazole", group: "sulfa", aliases: ["Bactrim", "TMP-SMX", "TMP/SMX", "เซพต้า", "Sulfamethoxazole/Trimethoprim"] },
+  { name: "Sulfasalazine", group: "sulfa", aliases: ["Salazopyrin"] },
+  { name: "Sulfadiazine", group: "sulfa", aliases: [] },
+  { name: "Aspirin", group: "nsaid", aliases: ["ASA", "Aspent", "แอสไพริน"] },
+  { name: "Ibuprofen", group: "nsaid", aliases: ["Brufen", "ไอบูโพรเฟน"] },
+  { name: "Diclofenac", group: "nsaid", aliases: ["Voltaren", "ดิโคลฟีแนค"] },
+  { name: "Naproxen", group: "nsaid", aliases: ["Naprosyn"] },
+  { name: "Indomethacin", group: "nsaid", aliases: ["Indocid"] },
+  { name: "Mefenamic acid", group: "nsaid", aliases: ["Ponstan"] },
+  { name: "Piroxicam", group: "nsaid", aliases: ["Feldene"] },
+  { name: "Ketorolac", group: "nsaid", aliases: ["Toradol"] },
+  { name: "Tenoxicam", group: "nsaid", aliases: ["Symgens"] },
+  { name: "Esflurbiprofen", group: "nsaid", aliases: ["Locoa"] },
+  { name: "Celecoxib", group: "cox2", aliases: ["Celebrex"] },
+  { name: "Etoricoxib", group: "cox2", aliases: ["Arcoxia"] },
+  { name: "Parecoxib", group: "cox2", aliases: ["Dynastat"] },
+  { name: "Ciprofloxacin", group: "fq", aliases: ["Ciprobay", "Cipro", "Cip"] },
+  { name: "Levofloxacin", group: "fq", aliases: ["Cravit", "Lefloxin", "Levo"] },
+  { name: "Norfloxacin", group: "fq", aliases: ["Lexinor", "Noroxin"] },
+  { name: "Ofloxacin", group: "fq", aliases: ["Tarivid"] },
+  { name: "Moxifloxacin", group: "fq", aliases: ["Vigamox", "Avelox"] },
+  { name: "Gatifloxacin", group: "fq", aliases: ["Zymar"] },
+  { name: "Phenytoin", group: "aed", aliases: ["Dilantin"] },
+  { name: "Carbamazepine", group: "aed", aliases: ["Tegretol", "CBZ"] },
+  { name: "Phenobarbital", group: "aed", aliases: ["Gardenal", "Phenobarb"] },
+  { name: "Lamotrigine", group: "aed", aliases: ["Lamictal"] },
+  { name: "Oxcarbazepine", group: "aed", aliases: ["Trileptal"] },
+  { name: "Sodium valproate", group: "other", aliases: ["Depakine", "Valparin"] },
+  { name: "Valproate Sodium", group: "other", aliases: ["Valparin"] },
+  { name: "Levetiracetam", group: "other", aliases: ["Keppra"] },
+  { name: "Topiramate", group: "other", aliases: ["Topamax"] },
+  { name: "Gabapentin", group: "other", aliases: ["Neurontin"] },
+  { name: "Pregabalin", group: "other", aliases: ["Lyrica"] },
+  { name: "Clonazepam", group: "other", aliases: ["Prenapril"] },
+  { name: "Clindamycin", group: "lincos", aliases: ["Dalacin", "Dalacin-T", "คลินดามัยซิน"] },
+  { name: "Lincomycin", group: "lincos", aliases: ["Lincocin"] },
+  { name: "Erythromycin", group: "macrolide", aliases: ["Erymycin"] },
+  { name: "Azithromycin", group: "macrolide", aliases: ["Zithromax", "Azi"] },
+  { name: "Clarithromycin", group: "macrolide", aliases: ["Klacid"] },
+  { name: "Roxithromycin", group: "macrolide", aliases: ["Rulid"] },
+  { name: "Doxycycline", group: "tetra", aliases: ["Vibramycin", "Doxy"] },
+  { name: "Gentamicin", group: "amg", aliases: ["Genta"] },
+  { name: "Amikacin", group: "amg", aliases: ["Amikin"] },
+  { name: "Streptomycin", group: "amg", aliases: [] },
+  { name: "Netilmicin", group: "amg", aliases: ["Netromycin"] },
+  { name: "Meropenem", group: "carbapenem", aliases: ["Meronem"] },
+  { name: "Imipenem + Cilastatin", group: "carbapenem", aliases: ["Tienam"] },
+  { name: "Ertapenem", group: "carbapenem", aliases: ["Invanz"] },
+  { name: "Biapenem", group: "carbapenem", aliases: ["Omegacin"] },
+  { name: "Vancomycin", group: "glycopep", aliases: ["Vancin", "Vanco"] },
+  { name: "Linezolid", group: "oxa", aliases: ["Zyvox"] },
+  { name: "Omeprazole", group: "ppi", aliases: ["Losec", "Miracid"] },
+  { name: "Pantoprazole", group: "ppi", aliases: ["Pantoval", "Controloc"] },
+  { name: "Esomeprazole", group: "ppi", aliases: ["Axiago", "Nexium"] },
+  { name: "Rabeprazole", group: "ppi", aliases: ["Pariet"] },
+  { name: "Aciclovir", group: "antiviral", aliases: ["Acyclovir", "Zovirax"] },
+  { name: "Oseltamivir", group: "antiviral", aliases: ["Tamiflu"] },
+  { name: "Favipiravir", group: "antiviral", aliases: ["Avigan"] },
+  { name: "Molnupiravir", group: "antiviral", aliases: ["Lagevrio"] },
+  { name: "Remdesivir", group: "antiviral", aliases: ["Veklury"] },
+  { name: "Fluconazole", group: "antifungal", aliases: ["Diflucan"] },
+  { name: "Itraconazole", group: "antifungal", aliases: ["Sporal"] },
+  { name: "Voriconazole", group: "antifungal", aliases: ["Vfend"] },
+  { name: "Ketoconazole", group: "antifungal", aliases: ["Nizoral"] },
+  { name: "Amphotericin B", group: "antifungal", aliases: ["Fungizone"] },
+  { name: "Clotrimazole", group: "antifungal", aliases: ["Canesten", "Candid"] },
+  { name: "Albendazole", group: "other", aliases: [] },
+  { name: "Mebendazole", group: "other", aliases: [] },
+  { name: "Praziquantel", group: "other", aliases: ["Biltricide"] },
+  { name: "Ivermectin", group: "other", aliases: ["Vermectin"] },
+  { name: "Metronidazole", group: "other", aliases: ["Flagyl"] },
+  { name: "Chloroquine", group: "other", aliases: [] },
+  { name: "Hydroxychloroquine", group: "other", aliases: ["Plaquenil"] },
+  { name: "Quinine", group: "other", aliases: [] },
+  { name: "Mefloquine", group: "other", aliases: ["Lariam"] },
+  { name: "Primaquine", group: "other", aliases: [] },
+  { name: "Isoniazid", group: "tb", aliases: ["INH"] },
+  { name: "Rifampicin", group: "tb", aliases: ["Rifam"] },
+  { name: "Pyrazinamide", group: "tb", aliases: ["PZA"] },
+  { name: "Ethambutol", group: "tb", aliases: ["EMB"] },
+  { name: "Streptomycin (TB)", group: "tb", aliases: [] },
+  { name: "Tramadol", group: "opioid", aliases: ["Tramal"] },
+  { name: "Morphine", group: "opioid", aliases: ["MST"] },
+  { name: "Fentanyl", group: "opioid", aliases: ["Duragesic"] },
+  { name: "Pethidine", group: "opioid", aliases: [] },
+  { name: "Codeine + Glyceryl guaiacolate", group: "opioid", aliases: ["Rolar"] },
+  { name: "Paracetamol", group: "para", aliases: ["Acetaminophen", "Tylenol", "Beramol", "Infulgan", "พารา"] },
+  { name: "Tramadol + Paracetamol", group: "opioid", aliases: ["Tramazac"] },
+  { name: "Orphenadrine + Paracetamol", group: "para", aliases: ["Norgesic"] },
+  { name: "Eperisone", group: "mr", aliases: ["Myonal"] },
+  { name: "Baclofen", group: "mr", aliases: ["Lioresal"] },
+  { name: "Limaprost", group: "mr", aliases: ["Opalmon"] },
+  { name: "Chlorpheniramine", group: "antihist", aliases: ["CPM"] },
+  { name: "Hydroxyzine", group: "antihist", aliases: ["Atarax"] },
+  { name: "Cetirizine", group: "antihist", aliases: ["Zyrtec"] },
+  { name: "Loratadine", group: "antihist", aliases: [] },
+  { name: "Desloratadine", group: "antihist", aliases: ["Aerius"] },
+  { name: "Fexofenadine", group: "antihist", aliases: ["Telfast"] },
+  { name: "Levocetirizine", group: "antihist", aliases: ["Xyzal"] },
+  { name: "Bilastine", group: "antihist", aliases: ["Bilaxten"] },
+  { name: "Cyproheptadine", group: "antihist", aliases: ["Periactin"] },
+  { name: "Diphenhydramine", group: "antihist", aliases: ["Benadryl"] },
+  { name: "Brompheniramine + Phenylephrine", group: "antihist", aliases: ["Dimetapp"] },
+  { name: "Enalapril", group: "acei", aliases: [] },
+  { name: "Captopril", group: "acei", aliases: ["Capoten"] },
+  { name: "Perindopril", group: "acei", aliases: ["Coversyl"] },
+  { name: "Losartan", group: "arb", aliases: ["Cozaar"] },
+  { name: "Valsartan", group: "arb", aliases: ["Diovan"] },
+  { name: "Telmisartan", group: "arb", aliases: [] },
+  { name: "Amlodipine", group: "ccb", aliases: ["Norvasc"] },
+  { name: "Nifedipine", group: "ccb", aliases: ["Adalat", "Nelapine"] },
+  { name: "Diltiazem", group: "ccb", aliases: ["Herbesser", "Cascor"] },
+  { name: "Verapamil", group: "ccb", aliases: ["Isoptin"] },
+  { name: "Manidipine", group: "ccb", aliases: ["Madiplot"] },
+  { name: "Lercanidipine", group: "ccb", aliases: ["Lercadip"] },
+  { name: "Nicardipine", group: "ccb", aliases: ["Cardepine"] },
+  { name: "Nimodipine", group: "ccb", aliases: ["Nimotop"] },
+  { name: "Atenolol", group: "bb", aliases: [] },
+  { name: "Propranolol", group: "bb", aliases: ["Inderal"] },
+  { name: "Metoprolol", group: "bb", aliases: ["Betaloc"] },
+  { name: "Carvedilol", group: "bb", aliases: ["Dilatrend"] },
+  { name: "Bisoprolol", group: "bb", aliases: ["Concor"] },
+  { name: "Nebivolol", group: "bb", aliases: ["Nebilet"] },
+  { name: "Labetalol", group: "bb", aliases: ["Avexa"] },
+  { name: "Furosemide", group: "diuretic", aliases: ["Lasix"] },
+  { name: "Hydrochlorothiazide", group: "diuretic", aliases: ["HCTZ", "Dichlotride"] },
+  { name: "Spironolactone", group: "diuretic", aliases: ["Aldactone"] },
+  { name: "Simvastatin", group: "statin", aliases: [] },
+  { name: "Atorvastatin", group: "statin", aliases: ["Lipitor", "Xarator"] },
+  { name: "Rosuvastatin", group: "statin", aliases: ["Crestor"] },
+  { name: "Pitavastatin", group: "statin", aliases: ["Livalo"] },
+  { name: "Clopidogrel", group: "antiplt", aliases: ["Plavix"] },
+  { name: "Ticagrelor", group: "antiplt", aliases: ["Brilinta"] },
+  { name: "Warfarin", group: "anticoag", aliases: [] },
+  { name: "Heparin", group: "anticoag", aliases: [] },
+  { name: "Enoxaparin", group: "anticoag", aliases: ["Clexane"] },
+  { name: "Apixaban", group: "anticoag", aliases: ["Eliquis", "Apixan"] },
+  { name: "Edoxaban", group: "anticoag", aliases: ["Lixiana"] },
+  { name: "Domperidone", group: "gi", aliases: ["Motilium"] },
+  { name: "Metoclopramide", group: "gi", aliases: ["Plasil"] },
+  { name: "Ondansetron", group: "gi", aliases: ["Zofran"] },
+  { name: "Sucralfate", group: "gi", aliases: ["Ulsanic", "Ulcefate"] },
+  { name: "Mosapride", group: "gi", aliases: ["Gasmotin"] },
+  { name: "Hyoscine-N-butylbromide", group: "gi", aliases: ["Buscopan"] },
+  { name: "Metformin", group: "dm", aliases: ["Glucophage"] },
+  { name: "Glipizide", group: "dm", aliases: ["Minidiab"] },
+  { name: "Gliclazide", group: "dm", aliases: ["Diamicron"] },
+  { name: "Pioglitazone", group: "dm", aliases: ["Utmos"] },
+  { name: "Sitagliptin", group: "dm", aliases: ["Januvia"] },
+  { name: "Vildagliptin", group: "dm", aliases: ["Galvus"] },
+  { name: "Dapagliflozin", group: "dm", aliases: ["Forxiga"] },
+  { name: "Insulin aspart", group: "insulin", aliases: ["NovoRapid"] },
+  { name: "Insulin glargine", group: "insulin", aliases: ["Lantus", "Toujeo"] },
+  { name: "Isophane insulin", group: "insulin", aliases: ["Humulin N", "NPH"] },
+  { name: "Soluble insulin", group: "insulin", aliases: ["Humulin R"] },
+  { name: "Prednisolone", group: "steroid", aliases: [] },
+  { name: "Dexamethasone", group: "steroid", aliases: [] },
+  { name: "Hydrocortisone", group: "steroid", aliases: ["Solu Cortef"] },
+  { name: "Methylprednisolone", group: "steroid", aliases: ["Solu Medrol"] },
+  { name: "Betamethasone valerate", group: "steroid", aliases: ["Betnovate"] },
+  { name: "Triamcinolone", group: "steroid", aliases: ["Kenacort", "Kenalog"] },
+  { name: "Mometasone", group: "steroid", aliases: ["Elomet", "Nasonex"] },
+  { name: "Fluticasone", group: "steroid", aliases: ["Flixotide", "Avamys"] },
+  { name: "Budesonide", group: "steroid", aliases: ["Pulmicort", "Rhinocort"] },
+  { name: "Allopurinol", group: "allop", aliases: ["Zyloric"] },
+  { name: "Febuxostat", group: "fbx", aliases: ["Uloric"] },
+  { name: "Colchicine", group: "other", aliases: [] },
+  { name: "Tranexamic acid", group: "other", aliases: ["Transamin"] },
+  { name: "Folic acid", group: "other", aliases: [] },
+  { name: "Vitamin K1", group: "other", aliases: ["Phytomenadione"] },
+  { name: "Levothyroxine", group: "other", aliases: ["Eltroxin"] },
+  { name: "Methimazole", group: "other", aliases: ["Tapazole"] },
+  { name: "Propylthiouracil", group: "other", aliases: ["PTU"] },
+  { name: "Bromhexine", group: "other", aliases: ["Bisolvon"] },
+  { name: "Acetylcysteine", group: "other", aliases: ["Fluimucil", "Muclear"] },
+  { name: "Glyceryl guaiacolate", group: "other", aliases: ["Guaifenesin"] },
+  { name: "Theophylline", group: "other", aliases: ["Theo Dur"] },
+  { name: "Salbutamol", group: "other", aliases: ["Ventolin"] },
+  { name: "Terbutaline", group: "other", aliases: ["Bricanyl"] },
+  { name: "Ipratropium + Fenoterol", group: "other", aliases: ["Berodual"] },
+  { name: "Tiotropium", group: "other", aliases: ["Spiriva"] },
+  { name: "Montelukast", group: "other", aliases: ["Singulair"] },
+  { name: "Digoxin", group: "other", aliases: ["Lanoxin"] },
+  { name: "Amiodarone", group: "other", aliases: ["Cordarone"] },
+  { name: "Dopamine", group: "other", aliases: [] },
+  { name: "Dobutamine", group: "other", aliases: [] },
+  { name: "Epinephrine", group: "other", aliases: ["Adrenaline"] },
+  { name: "Norepinephrine", group: "other", aliases: ["Levophed"] },
+  { name: "Iohexol", group: "contrast", aliases: ["Omnipaque"] },
+  { name: "Iopamidol", group: "contrast", aliases: ["Iopamiro"] },
+  { name: "Iodixanol", group: "contrast", aliases: ["Visipaque"] },
+  { name: "Ioversol", group: "contrast", aliases: ["Optiray"] },
+  { name: "Amitriptyline", group: "tca", aliases: ["Tryptanol"] },
+  { name: "Nortriptyline", group: "tca", aliases: ["Nortrilen"] },
+  { name: "Imipramine", group: "tca", aliases: ["Tofranil"] },
+  { name: "Clomipramine", group: "tca", aliases: ["Anafranil"] },
+  { name: "Fluoxetine", group: "ssri", aliases: ["Prozac"] },
+  { name: "Sertraline", group: "ssri", aliases: ["Zoloft"] },
+  { name: "Escitalopram", group: "ssri", aliases: ["Lexapro"] },
+  { name: "Venlafaxine", group: "snri", aliases: ["Efexor"] },
+  { name: "Duloxetine", group: "snri", aliases: ["Cymbalta"] },
+  { name: "Mirtazapine", group: "other", aliases: ["Remeron"] },
+  { name: "Trazodone", group: "other", aliases: ["Desirel"] },
+  { name: "Haloperidol", group: "antipsy", aliases: ["Haldol", "Haridol"] },
+  { name: "Risperidone", group: "antipsy", aliases: ["Risperdal"] },
+  { name: "Olanzapine", group: "antipsy", aliases: ["Zyprexa"] },
+  { name: "Quetiapine", group: "antipsy", aliases: ["Seroquel"] },
+  { name: "Aripiprazole", group: "antipsy", aliases: ["Apalife"] },
+  { name: "Chlorpromazine", group: "antipsy", aliases: ["Largactil"] },
+  { name: "Lorazepam", group: "benzo", aliases: ["Ativan"] },
+  { name: "Diazepam", group: "benzo", aliases: [] },
+  { name: "Alprazolam", group: "benzo", aliases: ["Xanax"] },
+  { name: "Midazolam", group: "benzo", aliases: ["Dormicum"] },
+  { name: "Ferrous fumarate", group: "other", aliases: [] },
+  { name: "Calcium carbonate", group: "other", aliases: [] },
+  { name: "Calcium gluconate", group: "other", aliases: [] },
+  { name: "Potassium chloride", group: "other", aliases: ["KCl"] },
+  { name: "Magnesium sulfate", group: "other", aliases: ["MgSO4"] },
+  { name: "Latanoprost", group: "other", aliases: ["Xalatan"] },
+  { name: "Timolol", group: "other", aliases: [] },
+  { name: "Brimonidine", group: "other", aliases: ["Alphagan"] },
+  { name: "Dorzolamide", group: "other", aliases: ["Trusopt"] },
+  { name: "Pilocarpine", group: "other", aliases: [] },
+  { name: "Atropine", group: "other", aliases: [] },
+  { name: "Lactulose", group: "other", aliases: ["Hepalac"] },
+  { name: "Bisacodyl", group: "other", aliases: ["Dulcolax"] },
+  { name: "Loperamide", group: "other", aliases: ["Imodium"] },
+  { name: "Benzbromarone", group: "other", aliases: [] },
+  { name: "Allopurinol + Probenecid", group: "allop", aliases: [] },
+  { name: "Probenecid", group: "other", aliases: [] },
+];
+
+/* ============================================================
+   GROUP DEFINITIONS
+   ============================================================ */
+const GROUPS = {
+  penicillin: { label: "Penicillins", members: ["Penicillin G","Penicillin V","Amoxicillin","Ampicillin","Cloxacillin","Dicloxacillin","Amoxicillin + Clavulanic acid","Piperacillin + Tazobactam"] },
+  ceph_amox:  { label: "Cephalosporins (Cephalexin – R1 same as Amox)", members: ["Cephalexin"] },
+  ceph_1:     { label: "Cephalosporins 1st gen", members: ["Cefazolin"] },
+  ceph_zin:   { label: "Cephalosporins (Cefuroxime/Cefoxitin)", members: ["Cefuroxime","Cefoxitin"] },
+  ceph_3:     { label: "Cephalosporins 3rd gen", members: ["Cefotaxime","Ceftriaxone","Ceftazidime"] },
+  ceph_other: { label: "Cephalosporins (other oral)", members: ["Cefdinir","Cefixime","Cefoperazone + Sulbactam"] },
+  sulfa:      { label: "Sulfa ATB", members: ["Co-Trimoxazole","Sulfasalazine","Sulfadiazine"] },
+  nsaid:      { label: "Conventional NSAIDs (COX-1)", members: ["Aspirin","Ibuprofen","Diclofenac","Naproxen","Indomethacin","Mefenamic acid","Piroxicam","Ketorolac","Tenoxicam","Esflurbiprofen"] },
+  cox2:       { label: "Selective COX-2 inhibitors", members: ["Celecoxib","Etoricoxib","Parecoxib"] },
+  fq:         { label: "Fluoroquinolones", members: ["Ciprofloxacin","Levofloxacin","Norfloxacin","Ofloxacin","Moxifloxacin","Gatifloxacin"] },
+  aed:        { label: "Aromatic anticonvulsants", members: ["Phenytoin","Carbamazepine","Phenobarbital","Lamotrigine","Oxcarbazepine"] },
+  lincos:     { label: "Lincosamides", members: ["Clindamycin","Lincomycin"] },
+  macrolide:  { label: "Macrolides", members: ["Erythromycin","Azithromycin","Clarithromycin","Roxithromycin"] },
+  tetra:      { label: "Tetracyclines", members: ["Doxycycline"] },
+  amg:        { label: "Aminoglycosides", members: ["Gentamicin","Amikacin","Streptomycin","Netilmicin"] },
+  carbapenem: { label: "Carbapenems", members: ["Meropenem","Imipenem + Cilastatin","Ertapenem","Biapenem"] },
+  glycopep:   { label: "Glycopeptides", members: ["Vancomycin"] },
+  oxa:        { label: "Oxazolidinones", members: ["Linezolid"] },
+  ppi:        { label: "PPIs", members: ["Omeprazole","Pantoprazole","Esomeprazole","Rabeprazole"] },
+  mr:         { label: "Muscle relaxants", members: ["Eperisone","Baclofen"] },
+  contrast:   { label: "Iodinated contrast media", members: ["Iohexol","Iopamidol","Iodixanol","Ioversol"] },
+  antiviral:  { label: "Antivirals", members: ["Aciclovir","Oseltamivir","Favipiravir","Molnupiravir","Remdesivir"] },
+  antifungal: { label: "Antifungals", members: ["Fluconazole","Itraconazole","Voriconazole","Ketoconazole","Amphotericin B","Clotrimazole"] },
+  tb:         { label: "Anti-TB drugs", members: ["Isoniazid","Rifampicin","Pyrazinamide","Ethambutol"] },
+  opioid:     { label: "Opioids", members: ["Tramadol","Morphine","Fentanyl","Pethidine","Codeine"] },
+  para:       { label: "Paracetamol / Acetaminophen", members: ["Paracetamol"] },
+  allop:      { label: "Allopurinol", members: ["Allopurinol"] },
+  fbx:        { label: "Febuxostat", members: ["Febuxostat"] },
+  acei:       { label: "ACE inhibitors", members: ["Enalapril","Captopril","Perindopril"] },
+  arb:        { label: "ARBs", members: ["Losartan","Valsartan","Telmisartan"] },
+  ccb:        { label: "Calcium channel blockers", members: ["Amlodipine","Nifedipine","Diltiazem","Verapamil","Manidipine","Lercanidipine","Nicardipine","Nimodipine"] },
+  bb:         { label: "Beta blockers", members: ["Atenolol","Propranolol","Metoprolol","Carvedilol","Bisoprolol","Nebivolol","Labetalol"] },
+  diuretic:   { label: "Diuretics", members: ["Furosemide","Hydrochlorothiazide","Spironolactone"] },
+  statin:     { label: "Statins (HMG-CoA reductase inhibitors)", members: ["Simvastatin","Atorvastatin","Rosuvastatin","Pitavastatin"] },
+  antiplt:    { label: "Antiplatelets", members: ["Clopidogrel","Ticagrelor"] },
+  anticoag:   { label: "Anticoagulants", members: ["Warfarin","Heparin","Enoxaparin","Apixaban","Edoxaban"] },
+  dm:         { label: "Oral antidiabetic drugs", members: ["Metformin","Glipizide","Gliclazide","Pioglitazone","Sitagliptin","Vildagliptin","Dapagliflozin"] },
+  insulin:    { label: "Insulins", members: ["Insulin aspart","Insulin glargine","Isophane insulin","Soluble insulin"] },
+  steroid:    { label: "Corticosteroids", members: ["Prednisolone","Dexamethasone","Hydrocortisone","Methylprednisolone","Triamcinolone","Mometasone","Fluticasone","Budesonide"] },
+  antihist:   { label: "Antihistamines", members: ["Chlorpheniramine","Hydroxyzine","Cetirizine","Loratadine","Desloratadine","Fexofenadine","Levocetirizine","Bilastine","Cyproheptadine","Diphenhydramine"] },
+  tca:        { label: "Tricyclic antidepressants", members: ["Amitriptyline","Nortriptyline","Imipramine","Clomipramine"] },
+  ssri:       { label: "SSRIs", members: ["Fluoxetine","Sertraline","Escitalopram"] },
+  snri:       { label: "SNRIs", members: ["Venlafaxine","Duloxetine"] },
+  antipsy:    { label: "Antipsychotics", members: ["Haloperidol","Risperidone","Olanzapine","Quetiapine","Aripiprazole","Chlorpromazine"] },
+  benzo:      { label: "Benzodiazepines", members: ["Lorazepam","Diazepam","Alprazolam","Midazolam"] },
+  gi:         { label: "GI agents", members: [] },
+  other:      { label: "Other", members: [] },
+};
+
+/* ============================================================
+   SEVERE REACTIONS
+   ============================================================ */
+const SEVERE_REACTIONS = ["SJS", "TEN", "DRESS", "AGEP", "Anaphylaxis", "SCAR"];
+const REACTION_LIST = [
+  { v: "rash", th: "ผื่น (rash)", sev: "mild" },
+  { v: "maculopapular rash", th: "ผื่น MP rash", sev: "mild" },
+  { v: "urticaria", th: "ลมพิษ (urticaria)", sev: "moderate" },
+  { v: "angioedema", th: "บวม (angioedema)", sev: "moderate" },
+  { v: "pruritus", th: "คัน (pruritus)", sev: "mild" },
+  { v: "Anaphylaxis", th: "Anaphylaxis", sev: "severe" },
+  { v: "SJS", th: "SJS (Stevens-Johnson)", sev: "severe" },
+  { v: "TEN", th: "TEN", sev: "severe" },
+  { v: "DRESS", th: "DRESS", sev: "severe" },
+  { v: "AGEP", th: "AGEP", sev: "severe" },
+  { v: "dyspnea", th: "หายใจลำบาก (dyspnea)", sev: "moderate" },
+  { v: "hypotension", th: "ความดันต่ำ (hypotension)", sev: "moderate" },
+  { v: "GI intolerance", th: "ระคายเคืองทางเดินอาหาร", sev: "mild" },
+  { v: "nausea/vomiting", th: "คลื่นไส้/อาเจียน", sev: "mild" },
+  { v: "unknown", th: "ไม่ทราบ", sev: "mild" },
+  { v: "อื่นๆ", th: "อื่นๆ (ระบุเอง)", sev: "mild" },
+];
+
+/* ============================================================
+   CROSS-REACTIVITY RULE ENGINE
+   ============================================================ */
+function getRecommendation(drugName, options = {}) {
+  const drug = DRUG_DB.find(d => d.name.toLowerCase() === drugName.toLowerCase());
+  if (!drug) {
+    return {
+      avoid: `แนะนำหลีกเลี่ยง ${drugName} เนื่องจากผู้ป่วยมีประวัติแพ้`,
+      group: null,
+      severe: false,
+    };
+  }
+
+  const isSevere = options.isSevere === true;
+  const g = drug.group;
+
+  // SEVERE → avoid entire group
+  if (isSevere && GROUPS[g] && GROUPS[g].members.length > 1) {
+    const groupLabel = GROUPS[g].label;
+    return {
+      avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม ${groupLabel} ทั้งกลุ่ม เนื่องจากเป็น severe reaction (${options.severeType || 'severe'})`,
+      group: groupLabel,
+      severe: true,
+    };
+  }
+
+  // Group-specific rules per guideline
+  switch (g) {
+    case "penicillin": {
+      // Special: Ampicillin → also Amox + Cephalexin
+      if (drug.name === "Ampicillin") {
+        return {
+          avoid: `แนะนำหลีกเลี่ยง Ampicillin รวมถึง Amoxicillin และ Cephalexin เนื่องจากอาจแพ้ยาข้ามกันได้`,
+          group: "Penicillins (R1 group)",
+          severe: false,
+        };
+      }
+      // Default: avoid penicillin group + cephalexin (R1 cross with Amox)
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม Penicillins รวมถึง Cephalexin เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Penicillins",
+        severe: false,
+      };
+    }
+    case "ceph_amox": {
+      // Cephalexin → also Ampicillin + Amoxicillin
+      return {
+        avoid: `แนะนำหลีกเลี่ยง Cephalexin รวมถึง Ampicillin และ Amoxicillin เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Cephalexin (R1 cross)",
+        severe: false,
+      };
+    }
+    case "ceph_zin": {
+      if (drug.name === "Cefoxitin") {
+        return {
+          avoid: `แนะนำหลีกเลี่ยง Cefoxitin รวมถึง Cefuroxime (Zinnat) เนื่องจากอาจแพ้ยาข้ามกันได้`,
+          group: "Cephalosporins (R1)",
+          severe: false,
+        };
+      }
+      // Cefuroxime
+      return {
+        avoid: `แนะนำหลีกเลี่ยง Cefuroxime รวมถึง Cefoxitin, Cefotaxime, Ceftriaxone และ Ceftazidime เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Cephalosporins (R1)",
+        severe: false,
+      };
+    }
+    case "ceph_3": {
+      const others = ["Cefotaxime","Ceftriaxone","Ceftazidime"].filter(x => x !== drug.name);
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} รวมถึง Cefuroxime, ${others.join(', ')} เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Cephalosporins 3rd gen (R1)",
+        severe: false,
+      };
+    }
+    case "sulfa": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยงการใช้ยา ${drug.name} และยา Sulfa ATB ได้แก่ Bactrim, Sulfasalazine และ Sulfadiazine เนื่องจากอาจแพ้ยาข้ามกันได้ ส่วน Sulfa non-ATB ขึ้นกับดุลยพินิจของแพทย์`,
+        group: "Sulfa ATB",
+        severe: false,
+      };
+    }
+    case "nsaid": {
+      // Pseudoallergy considerations
+      const reaction = (options.reaction || "").toLowerCase();
+      const isPseudo = reaction.includes("urticaria") || reaction.includes("angioedema") || reaction.includes("ลมพิษ") || reaction.includes("บวม");
+      const hasRiskFactor = options.hasNsaidRisk === true;
+
+      if (isPseudo && !hasRiskFactor) {
+        return {
+          avoid: `แนะนำหลีกเลี่ยง ${drug.name} (อาการ pseudoallergy) เนื่องจากอาจแพ้ยาข้ามกันได้`,
+          group: "NSAIDs (pseudoallergy)",
+          severe: false,
+        };
+      }
+      // Default: avoid all conv NSAID
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} รวมถึง Conventional NSAIDs (COX-I) ทั้งกลุ่ม เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Conventional NSAIDs (COX-1)",
+        severe: false,
+      };
+    }
+    case "fq": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม Fluoroquinolones เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Fluoroquinolones",
+        severe: false,
+      };
+    }
+    case "aed": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} รวมถึงยาในกลุ่ม aromatic anticonvulsants เช่น Phenytoin, Carbamazepine, Phenobarbital, Lamotrigine เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Aromatic AEDs",
+        severe: false,
+      };
+    }
+    case "lincos": {
+      const others = ["Clindamycin","Lincomycin"].filter(x => x !== drug.name);
+      return {
+        avoid: `แนะนำหลีกเลี่ยงการใช้ยา ${drug.name}, ${others.join(', ')} เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Lincosamides",
+        severe: false,
+      };
+    }
+    case "tetra": {
+      const others = GROUPS.tetra.members.filter(x => x !== drug.name);
+      return {
+        avoid: `หลีกเลี่ยงการใช้ยา ${drug.name} และ ${others.join(', ')} เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Tetracyclines",
+        severe: false,
+      };
+    }
+    case "macrolide": {
+      const others = GROUPS.macrolide.members.filter(x => x !== drug.name);
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม Macrolides (${others.join(', ')}) เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Macrolides",
+        severe: false,
+      };
+    }
+    case "amg": {
+      const others = GROUPS.amg.members.filter(x => x !== drug.name);
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม Aminoglycosides (${others.join(', ')}) เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Aminoglycosides",
+        severe: false,
+      };
+    }
+    case "ppi": {
+      const others = GROUPS.ppi.members.filter(x => x !== drug.name);
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และยาในกลุ่ม PPIs (${others.join(', ')}) เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "PPIs",
+        severe: false,
+      };
+    }
+    case "contrast": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} และสารทึบรังสี (iodinated contrast media) ตัวอื่น เนื่องจากอาจแพ้ยาข้ามกันได้`,
+        group: "Contrast media",
+        severe: false,
+      };
+    }
+    case "mr": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} เนื่องจากผู้ป่วยมีประวัติแพ้`,
+        group: "Muscle relaxants",
+        severe: false,
+      };
+    }
+    case "cox2": {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} เนื่องจากผู้ป่วยมีประวัติแพ้`,
+        group: "Selective COX-2",
+        severe: false,
+      };
+    }
+    default: {
+      return {
+        avoid: `แนะนำหลีกเลี่ยง ${drug.name} เนื่องจากผู้ป่วยมีประวัติแพ้`,
+        group: null,
+        severe: false,
+      };
+    }
+  }
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  drugs: [], // { drug, reaction, severity, note, isSevere }
+};
+
+const QUICK_DRUGS = ["Penicillin","Amoxicillin","Ceftriaxone","Cefotaxime","Bactrim","Aspirin","Ibuprofen","Diclofenac","Clindamycin","Ciprofloxacin","Phenytoin","Allopurinol"];
+
+/* ============================================================
+   RENDER: DRUG ROWS
+   ============================================================ */
+function renderDrugList() {
+  const container = document.getElementById('drugList');
+  if (state.drugs.length === 0) {
+    addDrugRow(); // ensure at least 1 row
+    return;
+  }
+  container.innerHTML = '';
+  state.drugs.forEach((entry, idx) => {
+    const isSevere = entry.severity === 'severe' || SEVERE_REACTIONS.includes(entry.reaction);
+    const hasData = entry.drug || entry.reaction;
+    const row = document.createElement('div');
+    row.className = `drug-row pl-4 py-3 pr-2 ${hasData ? 'has-data':''} ${isSevere ? 'severe':''}`;
+    row.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="num-badge" style="background:${isSevere ? 'var(--severe)' : 'var(--accent)'}">${idx+1}</span>
+          <span class="font-semibold text-sm">รายการยาที่ ${idx+1}</span>
+          ${entry.severity ? `<span class="chip severity-${entry.severity}">${entry.severity}</span>` : ''}
+        </div>
+        <button class="text-[var(--ink-soft)] hover:text-red-600 text-sm" data-action="remove" data-idx="${idx}">✕ ลบ</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2.5">
+        <div class="col-span-12">
+          <label class="label-th">ชื่อยา</label>
+          <div class="combo">
+            <input type="text" class="field" data-field="drug" data-idx="${idx}" value="${escapeHtml(entry.drug || '')}" placeholder="ค้นหายา (generic / trade / ชื่อย่อ)" autocomplete="off">
+            <div class="combo-list hidden"></div>
+          </div>
+        </div>
+        <div class="col-span-7">
+          <label class="label-th">Reaction Type</label>
+          <select class="field" data-field="reaction" data-idx="${idx}">
+            <option value="">-- เลือกอาการ --</option>
+            ${REACTION_LIST.map(r => `<option value="${r.v}" ${entry.reaction === r.v ? 'selected':''}>${r.th}</option>`).join('')}
+          </select>
+        </div>
+        <div class="col-span-5">
+          <label class="label-th">Severity</label>
+          <select class="field" data-field="severity" data-idx="${idx}">
+            <option value="">--</option>
+            <option value="mild" ${entry.severity === 'mild' ? 'selected':''}>Mild</option>
+            <option value="moderate" ${entry.severity === 'moderate' ? 'selected':''}>Moderate</option>
+            <option value="severe" ${entry.severity === 'severe' ? 'selected':''}>Severe</option>
+          </select>
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">Onset (เวลาเริ่มอาการ)</label>
+          <input type="text" class="field" data-field="onset" data-idx="${idx}" value="${escapeHtml(entry.onset || '')}" placeholder="—">
+        </div>
+        <div class="col-span-6">
+          <label class="label-th">Outcome</label>
+          <select class="field" data-field="outcome" data-idx="${idx}">
+            <option value="">--</option>
+            <option value="หายเป็นปกติ" ${entry.outcome === 'หายเป็นปกติ' ? 'selected':''}>หายเป็นปกติ</option>
+            <option value="หายโดยมีร่องรอย" ${entry.outcome === 'หายโดยมีร่องรอย' ? 'selected':''}>หายโดยมีร่องรอย</option>
+            <option value="ยังไม่หาย" ${entry.outcome === 'ยังไม่หาย' ? 'selected':''}>ยังไม่หาย</option>
+            <option value="เสียชีวิต" ${entry.outcome === 'เสียชีวิต' ? 'selected':''}>เสียชีวิต</option>
+            <option value="ไม่ทราบ" ${entry.outcome === 'ไม่ทราบ' ? 'selected':''}>ไม่ทราบ</option>
+          </select>
+        </div>
+        <div class="col-span-12">
+          <label class="label-th">รายละเอียดอาการ / Description</label>
+          <input type="text" class="field" data-field="note" data-idx="${idx}" value="${escapeHtml(entry.note || '')}" placeholder="—">
+        </div>
+        <div class="col-span-12">
+          <label class="label-th">Management (การจัดการ)</label>
+          <input type="text" class="field" data-field="management" data-idx="${idx}" value="${escapeHtml(entry.management || '')}" placeholder="—">
+        </div>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+
+  attachDrugEvents();
+}
+
+function attachDrugEvents() {
+  document.querySelectorAll('[data-action="remove"]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.idx);
+      state.drugs.splice(idx, 1);
+      renderDrugList();
+      autoUpdateAll();
+    };
+  });
+
+  document.querySelectorAll('[data-field="drug"]').forEach(input => {
+    const idx = parseInt(input.dataset.idx);
+    input.addEventListener('input', e => onDrugSearch(e, idx));
+    input.addEventListener('focus', e => onDrugSearch(e, idx));
+    input.addEventListener('blur', e => {
+      // delay to allow click on combo item to fire first
+      setTimeout(() => {
+        // only update from input value if state hasn't been set via combo-click
+        // (combo-click already updates state.drugs[idx].drug)
+        const currentVal = e.target.value;
+        if (currentVal !== state.drugs[idx].drug) {
+          state.drugs[idx].drug = currentVal;
+          autoUpdateAll();
+        }
+        const list = e.target.parentElement?.querySelector('.combo-list');
+        if (list) list.classList.add('hidden');
+      }, 250);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const list = e.target.parentElement.querySelector('.combo-list');
+        const highlighted = list.querySelector('.combo-item.highlighted') || list.querySelector('.combo-item');
+        if (highlighted) highlighted.click();
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-field="reaction"], [data-field="severity"], [data-field="note"]').forEach(el => {
+    el.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      state.drugs[idx][field] = e.target.value;
+      // Auto severity from reaction
+      if (field === 'reaction') {
+        const meta = REACTION_LIST.find(r => r.v === e.target.value);
+        if (meta && !state.drugs[idx].severity) {
+          state.drugs[idx].severity = meta.sev;
+        }
+      }
+      renderDrugList(); // re-render to show severity chip
+      autoUpdateAll();
+    });
+    el.addEventListener('input', e => {
+      if (e.target.dataset.field === 'note') {
+        const idx = parseInt(e.target.dataset.idx);
+        state.drugs[idx].note = e.target.value;
+        autoUpdateAll();
+      }
+    });
+  });
+}
+
+function onDrugSearch(e, idx) {
+  const q = e.target.value.trim().toLowerCase();
+  const list = e.target.parentElement.querySelector('.combo-list');
+  if (!list) return;
+
+  let results;
+  if (q.length === 0) {
+    results = DRUG_DB.slice(0, 12);
+  } else {
+    results = DRUG_DB.filter(d => {
+      if (d.name.toLowerCase().includes(q)) return true;
+      return d.aliases.some(a => a.toLowerCase().includes(q));
+    }).slice(0, 12);
+  }
+
+  if (results.length === 0) {
+    list.innerHTML = `<div class="combo-item text-[var(--ink-soft)] italic">ไม่พบ — ใช้ตามที่พิมพ์: <b>${escapeHtml(q)}</b></div>`;
+  } else {
+    list.innerHTML = results.map(d => {
+      const aliasText = d.aliases.length ? ` <span class="text-xs text-[var(--ink-soft)]">(${d.aliases.slice(0,3).join(', ')})</span>` : '';
+      const groupLabel = GROUPS[d.group]?.label || '';
+      return `<div class="combo-item" data-name="${escapeHtml(d.name)}">
+        <div class="font-semibold">${escapeHtml(d.name)}${aliasText}</div>
+        <div class="group-tag">${escapeHtml(groupLabel)}</div>
+      </div>`;
+    }).join('');
+  }
+  list.classList.remove('hidden');
+
+  list.querySelectorAll('.combo-item').forEach(item => {
+    // use mousedown so it fires BEFORE blur (which fires on mouseup)
+    item.onmousedown = (ev) => {
+      ev.preventDefault(); // prevents the blur on input
+      const chosen = item.dataset.name || e.target.value.trim();
+      state.drugs[idx].drug = chosen;
+      e.target.value = chosen; // sync input value
+      list.classList.add('hidden');
+      renderDrugList();
+      autoUpdateAll();
+    };
+  });
+}
+
+/* ============================================================
+   ADD / RESET
+   ============================================================ */
+function addDrugRow() {
+  state.drugs.push({ drug: '', reaction: '', severity: '', note: '', onset: '', management: '', outcome: '' });
+  renderDrugList();
+}
+
+document.getElementById('btnAddDrug').onclick = addDrugRow;
+
+document.getElementById('btnReset').onclick = () => {
+  if (!confirm('ล้างฟอร์มทั้งหมด? ข้อมูลที่ยังไม่ได้บันทึกจะหายไป')) return;
+  state.drugs = [];
+  document.querySelectorAll('input.field, select.field, textarea.field').forEach(el => {
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    else el.value = '';
+  });
+  setDefaultDate();
+  addDrugRow();
+  autoUpdateAll();
+};
+
+/* ============================================================
+   QUICK DRUGS
+   ============================================================ */
+function renderQuickDrugs() {
+  const c = document.getElementById('quickDrugs');
+  c.innerHTML = QUICK_DRUGS.map(d => `<button class="chip" data-quick="${escapeHtml(d)}">${escapeHtml(d)}</button>`).join('');
+  c.querySelectorAll('[data-quick]').forEach(b => {
+    b.onclick = () => {
+      // find first empty slot
+      let idx = state.drugs.findIndex(x => !x.drug);
+      if (idx === -1) {
+        state.drugs.push({ drug: b.dataset.quick, reaction: '', severity: '', note: '', onset: '', management: '', outcome: '' });
+      } else {
+        state.drugs[idx].drug = b.dataset.quick;
+      }
+      renderDrugList();
+      autoUpdateAll();
+    };
+  });
+}
+
+/* ============================================================
+   AUTO-UPDATE RECOMMENDATIONS & PREVIEW
+   ============================================================ */
+function autoUpdateAll() {
+  updateRecommendations();
+  updatePreview();
+  updateQuickNote();
+  updateSevereWarning();
+  document.getElementById('autoStatus').textContent = state.drugs.some(d => d.drug)
+    ? `✓ note อัตโนมัติพร้อมแล้ว — ${state.drugs.filter(d=>d.drug).length} รายการ`
+    : 'เริ่มกรอกข้อมูลเพื่อสร้าง note';
+}
+
+function updateRecommendations() {
+  const recAvoidEl = document.getElementById('recAvoid');
+  // Only auto-fill if user hasn't manually edited (or it's empty)
+  if (recAvoidEl.dataset.userEdited === 'true') return;
+
+  const validDrugs = state.drugs.filter(d => d.drug);
+  if (validDrugs.length === 0) {
+    recAvoidEl.value = '';
+    return;
+  }
+
+  const recs = validDrugs.map(d => {
+    const rec = getRecommendation(d.drug, {
+      isSevere: d.severity === 'severe' || SEVERE_REACTIONS.includes(d.reaction),
+      severeType: d.reaction,
+      reaction: d.reaction,
+    });
+    return rec.avoid;
+  });
+  recAvoidEl.value = recs.join('\n\n');
+}
+
+document.getElementById('recAvoid').addEventListener('input', e => {
+  e.target.dataset.userEdited = 'true';
+});
+document.getElementById('btnAutoAvoid').onclick = () => {
+  const el = document.getElementById('recAvoid');
+  el.dataset.userEdited = 'false';
+  updateRecommendations();
+  showToast('สร้างคำแนะนำใหม่แล้ว');
+};
+
+function updateSevereWarning() {
+  const banner = document.getElementById('severeWarning');
+  const msg = document.getElementById('severeMsg');
+  const severe = state.drugs.find(d => d.drug && (d.severity === 'severe' || SEVERE_REACTIONS.includes(d.reaction)));
+  if (severe) {
+    banner.classList.remove('hidden');
+    msg.textContent = `ผู้ป่วยมีประวัติแพ้ ${severe.drug} แบบ ${severe.reaction || 'severe reaction'} → แนะนำหลีกเลี่ยงยาทั้งกลุ่ม และระบุในบัตรแพ้ยาให้ชัดเจน`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+/* ============================================================
+   PREVIEW (Print Sheet)
+   ============================================================ */
+function updatePreview() {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const dateStr = v('evalDate') ? formatThaiDate(v('evalDate')) : '';
+  const cardIssueStr = v('cardIssueDate') ? formatThaiDate(v('cardIssueDate')) : '';
+
+  // Card status checkboxes
+  const cardStatus = document.querySelector('input[name="hasCard"]:checked')?.value || '';
+  const cs = (label) => cardStatus === label ? '☑' : '☐';
+
+  // ADR rows — render each drug entry with full info
+  const validDrugs = state.drugs.filter(d => d.drug);
+  const drugRows = validDrugs.length === 0
+    ? `<div class="adr-block">— ยังไม่มีข้อมูลยาที่แพ้ —</div>`
+    : validDrugs.map((d, i) => {
+        const reactionLabel = REACTION_LIST.find(r => r.v === d.reaction)?.th || d.reaction || '';
+        const detail = [reactionLabel, d.note].filter(Boolean).join(' — ');
+        const extra = [];
+        if (d.severity) extra.push(`Severity: ${d.severity}`);
+        if (d.onset) extra.push(`Onset: ${d.onset}`);
+        if (d.outcome) extra.push(`Outcome: ${d.outcome}`);
+        const extraTxt = extra.length ? `<div class="adr-extra">${escapeHtml(extra.join(' | '))}</div>` : '';
+        const mgmt = d.management ? `<div class="adr-extra"><i>Management:</i> ${escapeHtml(d.management)}</div>` : '';
+        return `
+          <div class="adr-block">
+            <div class="print-row">
+              <span class="print-label" style="min-width:90px"><b>รายการยาที่ ${i+1} :</b></span>
+              <span class="print-line">${escapeHtml(d.drug)}</span>
+            </div>
+            <div class="print-row">
+              <span class="print-label" style="min-width:90px;padding-left:14px">อาการ :</span>
+              <span class="print-line">${escapeHtml(detail)}</span>
+            </div>
+            ${extraTxt}
+            ${mgmt}
+          </div>`;
+      }).join('');
+
+  const html = `
+    <div class="print-header">
+      <h1>แบบฟอร์มการประเมินประวัติแพ้ยาผู้ป่วยใน</h1>
+      <div class="print-subtitle">โรงพยาบาลพระนครศรีอยุธยา · ห้องยาผู้ป่วยใน</div>
+      <div class="print-divider"></div>
+    </div>
+
+    <div class="print-row">
+      <span class="print-label">ชื่อ-นามสกุล :</span>
+      <span class="print-line">${escapeHtml(v('name'))}</span>
+    </div>
+    <div class="print-row">
+      <span class="print-label">HN :</span>
+      <span class="print-line" style="width:90px">${escapeHtml(v('hn'))}</span>
+      <span class="print-label">AN :</span>
+      <span class="print-line" style="width:90px">${escapeHtml(v('an'))}</span>
+      <span class="print-label">อายุ :</span>
+      <span class="print-line" style="width:60px">${escapeHtml(v('age'))}</span>
+      <span class="print-label">ตึก/หอ :</span>
+      <span class="print-line">${escapeHtml(v('ward'))}</span>
+    </div>
+    <div class="print-row">
+      <span class="print-label">แหล่งที่มาของข้อมูล :</span>
+      <span class="print-line">${escapeHtml(v('source'))}</span>
+    </div>
+
+    <h2>ข้อมูลบัตรแพ้ยาผู้ป่วย</h2>
+    <div class="print-row">
+      <span class="print-label">บัตรแพ้ยา/บัตรเตือน ออกโดย :</span>
+      <span class="print-line">${escapeHtml(v('cardHospital'))}</span>
+      <span class="print-label">วันที่ออกบัตร :</span>
+      <span class="print-line" style="width:100px">${escapeHtml(cardIssueStr)}</span>
+    </div>
+    <div class="print-row">
+      <span class="print-label">เลขที่บัตร :</span>
+      <span class="print-line" style="width:130px">${escapeHtml(v('cardNo'))}</span>
+      <span class="print-label">ประเภทบัตร :</span>
+      <span class="print-line">${escapeHtml(v('cardType'))}</span>
+    </div>
+    <div class="print-checkbox-row">
+      <div>${cs('มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย')} มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย &nbsp;&nbsp; ${cs('เคยมีบัตร แต่ชำรุด/หาย — ออกบัตรให้ใหม่')} เคยมีบัตร แต่ชำรุด/หาย → ออกบัตรให้ใหม่</div>
+      <div>${cs('มีบัตรอยู่เดิม แต่ไม่ได้นำมา')} มีบัตรอยู่เดิม แต่ไม่ได้นำมา &nbsp;&nbsp; ${cs('ไม่เคยมีบัตร — ออกบัตรให้ใหม่')} ไม่เคยมีบัตร → ออกบัตรให้ใหม่</div>
+    </div>
+    <div class="print-row">
+      <span class="print-label">วันที่เกิดอาการแพ้ยา :</span>
+      <span class="print-line" style="width:150px">${escapeHtml(v('adrOnsetDate'))}</span>
+      <span class="print-label">ผู้ประเมิน ADR เดิม :</span>
+      <span class="print-line">${escapeHtml(v('prevEvaluator'))}</span>
+    </div>
+
+    <h2>Pharmacist's Note</h2>
+    <div style="margin-bottom:6px">- ผู้ป่วยมีประวัติแพ้ยา / อาการข้างเคียงจากยา ดังนี้</div>
+    ${drugRows}
+
+    <h2>รายละเอียดเพิ่มเติม / คำแนะนำการใช้ยา</h2>
+    <div style="margin:6px 0 4px 0"><b>☐ แนะนำหลีกเลี่ยงการใช้ยา :</b></div>
+    <div class="print-line" style="display:block;min-height:48px;white-space:pre-wrap;border-bottom:none;border:1px dotted #666;padding:6px 8px">${escapeHtml(v('recAvoid'))}</div>
+
+    <div style="margin:10px 0 4px 0"><b>☐ แนะนำระวังการใช้ยา :</b></div>
+    <div class="print-line" style="display:block;min-height:28px;white-space:pre-wrap;border-bottom:none;border:1px dotted #666;padding:6px 8px">${escapeHtml(v('recCaution'))}</div>
+
+    <div style="margin:10px 0 4px 0"><b>ยาข้างเคียงที่สามารถใช้ได้ :</b></div>
+    <div class="print-line" style="display:block;min-height:28px;white-space:pre-wrap;border-bottom:none;border:1px dotted #666;padding:6px 8px">${escapeHtml(v('recAlt'))}</div>
+
+    <div class="print-signature">
+      <div>
+        ${v('student') ? `<div>นศภ. ผู้ประเมินเคส : <b>${escapeHtml(v('student'))}</b></div>` : ''}
+        <div>เภสัชกรผู้ประเมิน : <b>${escapeHtml(v('pharmacist'))}</b></div>
+        <div>วันที่ประเมิน : <b>${escapeHtml(dateStr)}</b></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('printArea').innerHTML = html;
+}
+
+/* ============================================================
+   QUICK NOTE (for HIS)
+   ============================================================ */
+function updateQuickNote() {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const validDrugs = state.drugs.filter(d => d.drug);
+  if (validDrugs.length === 0) {
+    document.getElementById('quickNote').value = '';
+    return;
+  }
+
+  const lines = [];
+  lines.push(`Pharmacist's note (${formatThaiDate(v('evalDate') || todayISO())})`);
+  lines.push(`Pt: ${v('name')} HN ${v('hn')} อายุ ${v('age')} ตึก ${v('ward')}`);
+  lines.push(`แหล่งข้อมูล: ${v('source')}`);
+  lines.push('');
+  lines.push('ผู้ป่วยมีประวัติแพ้ยา/อาการไม่พึงประสงค์จากยา ดังนี้:');
+  validDrugs.forEach((d, i) => {
+    const sev = d.severity ? ` [${d.severity}]` : '';
+    const reactionTxt = [d.reaction, d.note].filter(Boolean).join(' — ');
+    lines.push(`${i+1}. ${d.drug}${sev}: ${reactionTxt || '-'}`);
+  });
+  lines.push('');
+  if (v('recAvoid')) {
+    lines.push('คำแนะนำหลีกเลี่ยง:');
+    lines.push(v('recAvoid'));
+  }
+  if (v('recCaution')) {
+    lines.push('');
+    lines.push('คำแนะนำระวังการใช้:');
+    lines.push(v('recCaution'));
+  }
+  if (v('recAlt')) {
+    lines.push('');
+    lines.push('ยาทางเลือกที่สามารถใช้ได้: ' + v('recAlt'));
+  }
+  lines.push('');
+  if (v('student')) lines.push(`นศภ. ผู้ประเมินเคส: ${v('student')}`);
+  lines.push(`เภสัชกรผู้ประเมิน: ${v('pharmacist')}`);
+  document.getElementById('quickNote').value = lines.join('\n');
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function formatThaiDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y) return iso;
+  return `${parseInt(d)}/${parseInt(m)}/${parseInt(y)}`;
+}
+function setDefaultDate() {
+  document.getElementById('evalDate').value = todayISO();
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById('tab-' + t.dataset.tab).classList.remove('hidden');
+  };
+});
+document.getElementById('tab-form').classList.remove('hidden');
+
+/* ============================================================
+   ACTIONS: PRINT / PDF / COPY
+   Both use the SAME inline styles to guarantee preview === output
+   ============================================================ */
+const PRINT_CSS = `
+  @page { size: A4 portrait; margin: 14mm; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #fff; color: #000 !important;
+    font-family: 'Sarabun', system-ui, sans-serif;
+    font-size: 13px; line-height: 1.5;
+    font-weight: 400;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body { width: 182mm; margin: 0 auto; padding: 0; }
+  /* All text forced black - no grey leak from any inherited styles */
+  body, body *, body *::before, body *::after { color: #000 !important; }
+
+  .print-header {
+    display: block;
+    text-align: center;
+    width: 100%;
+    margin: 0 0 10px 0;
+    page-break-inside: avoid;
+  }
+  h1 {
+    font-size: 16px; font-weight: 700;
+    text-align: center;
+    margin: 0 0 2px 0; padding: 0;
+    line-height: 1.3;
+    letter-spacing: 0;
+  }
+  .print-subtitle {
+    text-align: center;
+    font-size: 12px; font-weight: 400;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+  }
+  .print-divider {
+    width: 100%;
+    height: 0;
+    border-top: 1px solid #000;
+    margin: 0 0 10px 0;
+  }
+  h2 {
+    font-size: 13px; font-weight: 700;
+    margin: 12px 0 6px 0;
+    padding: 0 0 2px 0;
+    border-bottom: 1px solid #666;
+    line-height: 1.3;
+    page-break-after: avoid;
+  }
+  .print-row {
+    display: flex; gap: 10px;
+    align-items: baseline;
+    margin: 0 0 5px 0;
+    line-height: 1.5;
+    flex-wrap: nowrap;
+    page-break-inside: avoid;
+  }
+  .print-label {
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+  .print-line {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-bottom: 1px dotted #666;
+    padding: 0 4px 1px 4px;
+    line-height: 1.5;
+    min-height: 17px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  .print-line[style*="width"] { flex: 0 0 auto; }
+  .adr-block { margin-bottom: 7px; page-break-inside: avoid; }
+  .adr-extra { padding-left: 14px; font-size: 11px; margin-top: 1px; line-height: 1.4; }
+  .print-checkbox-row { margin: 5px 0; font-size: 12px; line-height: 1.7; }
+  .print-signature { display: flex; justify-content: flex-end; margin-top: 22px; }
+  .print-signature > div { text-align: left; }
+`;
+
+document.getElementById('btnPrint').onclick = () => {
+  const printContent = document.getElementById('printArea').innerHTML;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+    <title>Allergy Note</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>${PRINT_CSS}</style>
+    </head><body>${printContent}</body></html>`);
+  w.document.close();
+  // Wait for fonts to load before printing — prevents font-shift
+  setTimeout(() => {
+    if (w.document.fonts && w.document.fonts.ready) {
+      w.document.fonts.ready.then(() => { w.focus(); w.print(); });
+    } else {
+      w.focus(); w.print();
+    }
+  }, 700);
+};
+
+document.getElementById('btnExportPdf').onclick = async () => {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const filename = `แบบฟอร์มประเมินแพ้ยา_${v('hn') || 'NEW'}_${v('name') || 'patient'}_${v('evalDate') || todayISO()}.pdf`;
+  showToast('กำลังสร้าง PDF...');
+
+  // ============================================================
+  // PDF EXPORT — rebuild as simple block-layout HTML
+  // (Avoids html2canvas flex/clipping bugs with Thai text)
+  // ============================================================
+  const dateStr = v('evalDate') ? formatThaiDate(v('evalDate')) : '';
+  const cardIssueStr = v('cardIssueDate') ? formatThaiDate(v('cardIssueDate')) : '';
+  const cardStatus = document.querySelector('input[name="hasCard"]:checked')?.value || '';
+  const cs = (label) => cardStatus === label ? '☑' : '☐';
+  const validDrugs = state.drugs.filter(d => d.drug);
+
+  // Inline label + dotted underline value (same line)
+  const fld = (label, val, w) =>
+    `<span style="font-weight:600">${label}</span>` +
+    `<span style="display:inline-block;border-bottom:1px dotted #555;padding:0 5px 1px 5px;min-width:${w};margin:0 8px 0 4px;">${escapeHtml(val || ' ')}</span>`;
+
+  // Single full-width field (label + value spanning the rest of the row)
+  const fullFld = (label, val) => `
+    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
+      <span style="font-weight:600">${label}</span>
+      <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;min-width:380px;margin-left:6px">${escapeHtml(val || ' ')}</span>
+    </div>`;
+
+  const drugBlocks = validDrugs.length === 0
+    ? '<div style="color:#666;padding:6px 0">— ยังไม่มีข้อมูลยาที่แพ้ —</div>'
+    : validDrugs.map((d, i) => {
+        const reactionLabel = REACTION_LIST.find(r => r.v === d.reaction)?.th || d.reaction || '';
+        const detail = [reactionLabel, d.note].filter(Boolean).join(' — ');
+        const meta = [];
+        if (d.severity) meta.push(`Severity: ${d.severity}`);
+        if (d.onset) meta.push(`Onset: ${d.onset}`);
+        if (d.outcome) meta.push(`Outcome: ${d.outcome}`);
+        return `
+          <div style="margin:0 0 8px 0;page-break-inside:avoid">
+            <div style="margin:0 0 2px 0;line-height:1.6">
+              <span style="font-weight:600">รายการยาที่ ${i+1} :</span>
+              <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;margin-left:6px;min-width:340px">${escapeHtml(d.drug)}</span>
+            </div>
+            <div style="margin:0 0 2px 0;padding-left:14px;line-height:1.6">
+              <span style="font-weight:600">อาการ :</span>
+              <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;margin-left:6px;min-width:400px">${escapeHtml(detail)}</span>
+            </div>
+            ${meta.length ? `<div style="padding-left:14px;font-size:11px;color:#222">${escapeHtml(meta.join(' | '))}</div>` : ''}
+            ${d.management ? `<div style="padding-left:14px;font-size:11px;color:#222"><i>Management:</i> ${escapeHtml(d.management)}</div>` : ''}
+          </div>`;
+      }).join('');
+
+  const html = `
+    <div style="text-align:center;margin:0 0 12px 0;page-break-inside:avoid">
+      <div style="font-size:16px;font-weight:700;line-height:1.3">แบบฟอร์มการประเมินประวัติแพ้ยาผู้ป่วยใน</div>
+      <div style="font-size:12px;line-height:1.3;margin-top:2px">โรงพยาบาลพระนครศรีอยุธยา · ห้องยาผู้ป่วยใน</div>
+      <div style="border-top:1px solid #000;margin-top:8px"></div>
+    </div>
+
+    ${fullFld('ชื่อ-นามสกุล :', v('name'))}
+    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
+      ${fld('HN :', v('hn'), '70px')}${fld('AN :', v('an'), '80px')}${fld('อายุ :', v('age'), '60px')}${fld('ตึก/หอ :', v('ward'), '110px')}
+    </div>
+    ${fullFld('แหล่งที่มาของข้อมูล :', v('source'))}
+
+    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">ข้อมูลบัตรแพ้ยาผู้ป่วย</div>
+    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
+      ${fld('บัตรแพ้ยา/บัตรเตือน ออกโดย :', v('cardHospital'), '170px')}${fld('วันที่ออกบัตร :', cardIssueStr, '90px')}
+    </div>
+    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
+      ${fld('เลขที่บัตร :', v('cardNo'), '120px')}${fld('ประเภทบัตร :', v('cardType'), '160px')}
+    </div>
+    <div style="margin:5px 0;font-size:12px;line-height:1.7">
+      <div>${cs('มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย')} มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย &nbsp;&nbsp; ${cs('เคยมีบัตร แต่ชำรุด/หาย — ออกบัตรให้ใหม่')} เคยมีบัตร แต่ชำรุด/หาย → ออกบัตรให้ใหม่</div>
+      <div>${cs('มีบัตรอยู่เดิม แต่ไม่ได้นำมา')} มีบัตรอยู่เดิม แต่ไม่ได้นำมา &nbsp;&nbsp; ${cs('ไม่เคยมีบัตร — ออกบัตรให้ใหม่')} ไม่เคยมีบัตร → ออกบัตรให้ใหม่</div>
+    </div>
+    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
+      ${fld('วันที่เกิดอาการแพ้ยา :', v('adrOnsetDate'), '140px')}${fld('ผู้ประเมิน ADR เดิม :', v('prevEvaluator'), '160px')}
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">Pharmacist's Note</div>
+    <div style="margin-bottom:6px">- ผู้ป่วยมีประวัติแพ้ยา / อาการข้างเคียงจากยา ดังนี้</div>
+    ${drugBlocks}
+
+    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">รายละเอียดเพิ่มเติม / คำแนะนำการใช้ยา</div>
+    <div style="margin:6px 0 4px 0;font-weight:700">☐ แนะนำหลีกเลี่ยงการใช้ยา :</div>
+    <div style="border:1px dotted #555;padding:6px 8px;min-height:48px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recAvoid'))}</div>
+
+    <div style="margin:10px 0 4px 0;font-weight:700">☐ แนะนำระวังการใช้ยา :</div>
+    <div style="border:1px dotted #555;padding:6px 8px;min-height:28px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recCaution'))}</div>
+
+    <div style="margin:10px 0 4px 0;font-weight:700">ยาข้างเคียงที่สามารถใช้ได้ :</div>
+    <div style="border:1px dotted #555;padding:6px 8px;min-height:28px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recAlt'))}</div>
+
+    <div style="margin-top:24px;text-align:right;page-break-inside:avoid">
+      ${v('student') ? `<div>นศภ. ผู้ประเมินเคส : <b>${escapeHtml(v('student'))}</b></div>` : ''}
+      <div>เภสัชกรผู้ประเมิน : <b>${escapeHtml(v('pharmacist'))}</b></div>
+      <div>วันที่ประเมิน : <b>${escapeHtml(dateStr)}</b></div>
+    </div>
+  `;
+
+  // Off-screen render container
+  const RENDER_WIDTH_PX = 720;          // ~190mm at 96dpi (safe for A4 - 15mm margins)
+  const PAGE_MARGIN_MM = 15;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:${RENDER_WIDTH_PX}px;background:#fff;z-index:-1;`;
+  const inner = document.createElement('div');
+  inner.style.cssText = `width:${RENDER_WIDTH_PX}px;padding:0;margin:0;background:#fff;color:#000;font-family:Sarabun,system-ui,sans-serif;font-size:13px;line-height:1.5;box-sizing:border-box;`;
+  inner.innerHTML = html;
+  wrap.appendChild(inner);
+  document.body.appendChild(wrap);
+
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch(e) {}
+  }
+  await new Promise(r => setTimeout(r, 200));
+
+  try {
+    if (typeof html2pdf === 'undefined') throw new Error('html2pdf library not loaded');
+    await html2pdf().from(inner).set({
+      margin: [PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM],
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        backgroundColor: '#ffffff',
+        windowWidth: RENDER_WIDTH_PX,
+        width: RENDER_WIDTH_PX,
+        scrollX: 0,
+        scrollY: 0,
+        logging: false,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      pagebreak: { mode: ['css', 'legacy'] }
+    }).save();
+    recordCase({ trigger: 'export_pdf' });
+    showToast('PDF บันทึกแล้ว ✓');
+  } catch (err) {
+    console.error('PDF export error:', err);
+    showToast('เกิดข้อผิดพลาด — ' + (err.message || 'ลองใหม่'));
+  } finally {
+    if (wrap.parentNode) document.body.removeChild(wrap);
+  }
+};
+
+
+/* ============================================================
+   WORKLOAD STATISTICS / P4P TRACKING
+   Architecture: StatsStore abstracts storage layer.
+   Current: localStorage. Future: swap _save/_load with API calls.
+   ============================================================ */
+const STATS_KEY = 'pharmAllergyStats';
+const STATS_VERSION = 2; // bump when schema changes
+
+const StatsStore = {
+  _load() {
+    try {
+      const raw = localStorage.getItem(STATS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      // Backward-compat migration: ensure isInTime / isP4P / student fields exist
+      return parsed.map(r => {
+        if (typeof r.isInTime === 'undefined') {
+          const shift = r.shift || 'ในเวลา';
+          r.isInTime = shift === 'ในเวลา' || (typeof shift === 'string' && shift.startsWith('ในเวลา'));
+          r.isP4P = r.isInTime;
+        }
+        if (typeof r.student === 'undefined') r.student = '';
+        return r;
+      });
+    } catch(e) { return []; }
+  },
+  _save(arr) {
+    localStorage.setItem(STATS_KEY, JSON.stringify(arr));
+  },
+  all() { return this._load(); },
+  add(record) {
+    const arr = this._load();
+    arr.push(record);
+    this._save(arr);
+    return record;
+  },
+  upsert(record) {
+    // dedupe by caseKey: same HN + evalDate + pharmacist → update existing
+    const arr = this._load();
+    const idx = arr.findIndex(r => r.caseKey === record.caseKey);
+    if (idx >= 0) {
+      // preserve original timestamp
+      record.firstRecorded = arr[idx].firstRecorded || arr[idx].timestamp;
+      record.updateCount = (arr[idx].updateCount || 1) + 1;
+      arr[idx] = record;
+    } else {
+      record.firstRecorded = record.timestamp;
+      record.updateCount = 1;
+      arr.push(record);
+    }
+    this._save(arr);
+    return record;
+  },
+  remove(caseKey) {
+    const arr = this._load().filter(r => r.caseKey !== caseKey);
+    this._save(arr);
+  },
+  clear() { localStorage.removeItem(STATS_KEY); },
+};
+
+// Backward-compat aliases (used elsewhere in code)
+function getStats() { return StatsStore.all(); }
+function saveStats(arr) { StatsStore._save(arr); }
+
+function recordCase(opts = {}) {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const validDrugs = state.drugs.filter(d => d.drug);
+  if (validDrugs.length === 0) return;
+  const pharmacist = v('pharmacist') || '(ไม่ระบุ)';
+  if (!v('hn') && !v('name')) return; // need at least one identifier
+
+  // Per-ADR-entry detail (so we can do drug-level stats)
+  const adrEntries = validDrugs.map(d => {
+    const drugMeta = DRUG_DB.find(x => x.name.toLowerCase() === d.drug.toLowerCase());
+    const groupKey = drugMeta?.group || 'unknown';
+    const groupLabel = GROUPS[groupKey]?.label || groupKey;
+    const isSevere = d.severity === 'severe' || SEVERE_REACTIONS.includes(d.reaction);
+    return {
+      drug: d.drug,
+      drugGroup: groupKey,
+      drugGroupLabel: groupLabel,
+      reaction: d.reaction || '',
+      severity: d.severity || '',
+      onset: d.onset || '',
+      outcome: d.outcome || '',
+      isSevere,
+    };
+  });
+
+  const hasSevere = adrEntries.some(a => a.isSevere);
+  const evalDate = v('evalDate') || todayISO();
+  const shift = v('shift') || 'ในเวลา';
+
+  // P4P / shift classification
+  // 1 encounter = 1 case (regardless of how many ADR entries).
+  // P4P-eligible = ในเวลา only.
+  const isInTime = shift === 'ในเวลา' || shift.startsWith('ในเวลา');
+  const isP4P = isInTime;
+
+  // caseKey = HN + evalDate ONLY → ensures one encounter is counted as one case
+  // (changing pharmacist or re-saving updates the SAME record, doesn't create a new one)
+  const caseKey = `${v('hn') || v('name')}|${evalDate}`;
+
+  const record = {
+    caseKey,
+    schemaVersion: STATS_VERSION,
+    timestamp: new Date().toISOString(),
+    evalDate,
+    yearMonth: evalDate.slice(0, 7),  // "2026-05"
+    year: evalDate.slice(0, 4),
+    hn: v('hn'),
+    an: v('an'),
+    name: v('name'),
+    ward: v('ward'),
+    pharmacist,
+    student: v('student'),
+    shift,
+    isInTime,
+    isP4P,
+    source: v('source'),
+    drugCount: validDrugs.length,
+    drugs: validDrugs.map(d => d.drug).join('; '),
+    drugGroups: [...new Set(adrEntries.map(a => a.drugGroupLabel))].join('; '),
+    reactions: adrEntries.map(a => a.reaction).filter(Boolean).join('; '),
+    severityMix: adrEntries.map(a => a.severity).filter(Boolean).join('; '),
+    hasSevere,
+    adrEntries,
+    trigger: opts.trigger || 'manual',
+  };
+
+  return StatsStore.upsert(record);
+}
+
+document.getElementById('btnDashboard').onclick = () => {
+  initDashboardFilters();
+  renderDashboard();
+  document.getElementById('dashboardModal').classList.remove('hidden');
+};
+
+/* ============================================================
+   DASHBOARD FILTER + RENDER
+   ============================================================ */
+const dashState = {
+  scope: 'month',         // 'month' | 'year' | 'all'
+  month: todayISO().slice(0,7),
+  year: todayISO().slice(0,4),
+  pharmacist: '',
+  shift: '',              // '' | 'inTime' | 'offTime'
+  charts: {},             // hold Chart.js instances for cleanup
+};
+
+function initDashboardFilters() {
+  const stats = getStats();
+  // populate years
+  const years = [...new Set(stats.map(s => (s.year || s.evalDate?.slice(0,4))).filter(Boolean))].sort().reverse();
+  if (years.length === 0) years.push(todayISO().slice(0,4));
+  const ySel = document.getElementById('filterYear');
+  ySel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  ySel.value = dashState.year;
+
+  // populate pharmacists
+  const pharms = [...new Set(stats.map(s => s.pharmacist).filter(Boolean))].sort();
+  const pSel = document.getElementById('filterPharmacist');
+  pSel.innerHTML = '<option value="">ทั้งหมด</option>' + pharms.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  pSel.value = dashState.pharmacist;
+
+  document.getElementById('filterScope').value = dashState.scope;
+  document.getElementById('filterMonth').value = dashState.month;
+  toggleScopeUI();
+}
+
+function toggleScopeUI() {
+  const scope = dashState.scope;
+  document.getElementById('filterMonthWrap').classList.toggle('hidden', scope !== 'month');
+  document.getElementById('filterYearWrap').classList.toggle('hidden', scope !== 'year');
+}
+
+['filterScope','filterMonth','filterYear','filterPharmacist','filterShift'].forEach(id => {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', e => {
+      const v = e.target.value;
+      if (id === 'filterScope') { dashState.scope = v; toggleScopeUI(); }
+      else if (id === 'filterMonth') dashState.month = v;
+      else if (id === 'filterYear') dashState.year = v;
+      else if (id === 'filterPharmacist') dashState.pharmacist = v;
+      else if (id === 'filterShift') dashState.shift = v;
+      renderDashboard();
+    });
+  });
+});
+// because DOMContentLoaded may have fired already, also bind directly
+setTimeout(() => {
+  ['filterScope','filterMonth','filterYear','filterPharmacist','filterShift'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || el._dashboardBound) return;
+    el._dashboardBound = true;
+    el.addEventListener('change', e => {
+      const v = e.target.value;
+      if (id === 'filterScope') { dashState.scope = v; toggleScopeUI(); }
+      else if (id === 'filterMonth') dashState.month = v;
+      else if (id === 'filterYear') dashState.year = v;
+      else if (id === 'filterPharmacist') dashState.pharmacist = v;
+      else if (id === 'filterShift') dashState.shift = v;
+      renderDashboard();
+    });
+  });
+}, 100);
+
+document.getElementById('btnFilterReset').onclick = () => {
+  dashState.scope = 'month';
+  dashState.month = todayISO().slice(0,7);
+  dashState.year = todayISO().slice(0,4);
+  dashState.pharmacist = '';
+  dashState.shift = '';
+  initDashboardFilters();
+  const fs = document.getElementById('filterShift');
+  if (fs) fs.value = '';
+  renderDashboard();
+};
+
+// Dashboard sub-tabs
+document.querySelectorAll('[data-dtab]').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('[data-dtab]').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.dtab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById('dtab-' + t.dataset.dtab).classList.remove('hidden');
+    // Re-render charts when switching tabs (canvas needs fresh container size)
+    setTimeout(() => renderDashboard(), 50);
+  };
+});
+
+function applyDashFilter(stats) {
+  return stats.filter(s => {
+    if (dashState.pharmacist && s.pharmacist !== dashState.pharmacist) return false;
+    if (dashState.shift === 'inTime' && !s.isInTime) return false;
+    if (dashState.shift === 'offTime' && s.isInTime) return false;
+    if (dashState.scope === 'month' && s.yearMonth !== dashState.month && s.evalDate?.slice(0,7) !== dashState.month) return false;
+    if (dashState.scope === 'year' && s.year !== dashState.year && s.evalDate?.slice(0,4) !== dashState.year) return false;
+    return true;
+  });
+}
+
+function destroyCharts() {
+  Object.values(dashState.charts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  dashState.charts = {};
+}
+
+function renderDashboard() {
+  const allStats = getStats();
+  const stats = applyDashFilter(allStats);
+
+  // ---- KPIs ----
+  const total = stats.length;
+  const severe = stats.filter(s => s.hasSevere).length;
+  const totalDrugs = stats.reduce((sum, s) => sum + (s.drugCount || 0), 0);
+  const uniqueHN = new Set(stats.map(s => s.hn).filter(Boolean)).size;
+  const inTimeCount = stats.filter(s => s.isInTime).length;
+  const offTimeCount = stats.filter(s => !s.isInTime).length;
+  const p4pCount = stats.filter(s => s.isP4P).length;
+
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statSevere').textContent = severe;
+  document.getElementById('statDrugs').textContent = totalDrugs;
+  document.getElementById('statUniqueHN').textContent = uniqueHN;
+  setText('statP4P', p4pCount);
+  setText('statInTime', inTimeCount);
+  setText('statOffTime', offTimeCount);
+
+  const scopeLabel = dashState.scope === 'month' ? formatMonthLabel(dashState.month)
+                   : dashState.scope === 'year' ? `ปี ${dashState.year}`
+                   : 'ทั้งหมด';
+  document.getElementById('statTotalSub').textContent = scopeLabel;
+  document.getElementById('statSevereSub').textContent = total > 0 ? `${(severe/total*100).toFixed(1)}% ของทั้งหมด` : '—';
+  document.getElementById('statThisMonth').textContent = dashState.pharmacist ? `เภสัชกร: ${dashState.pharmacist}` : '';
+
+  // ---- Smart summary ----
+  document.getElementById('smartSummary').innerHTML = buildSmartSummary(stats, scopeLabel);
+
+  // ---- By pharmacist (always over filtered set) ----
+  // Each pharmacist's row also tracks P4P (inTime) cases separately
+  const pharmAgg = {};
+  stats.forEach(s => {
+    const p = s.pharmacist || '(ไม่ระบุ)';
+    if (!pharmAgg[p]) pharmAgg[p] = { cases: 0, adrs: 0, severe: 0, p4p: 0, offTime: 0 };
+    pharmAgg[p].cases += 1;
+    pharmAgg[p].adrs += (s.drugCount || 0);
+    if (s.hasSevere) pharmAgg[p].severe += 1;
+    if (s.isP4P) pharmAgg[p].p4p += 1;
+    if (!s.isInTime) pharmAgg[p].offTime += 1;
+  });
+  const sortedPharm = Object.entries(pharmAgg).sort((a,b) => b[1].p4p - a[1].p4p || b[1].cases - a[1].cases);
+  document.getElementById('statByPharmacist').innerHTML = sortedPharm.length === 0
+    ? '<tr><td colspan="6" class="text-center text-gray-400 py-3">— ยังไม่มีข้อมูล —</td></tr>'
+    : sortedPharm.map(([p, x]) => `<tr class="border-b border-[var(--line)]">
+        <td class="py-1.5 px-3">${escapeHtml(p)}</td>
+        <td class="py-1.5 px-3 text-right font-mono">${x.cases}</td>
+        <td class="py-1.5 px-3 text-right font-mono font-bold text-[var(--accent)]">${x.p4p}</td>
+        <td class="py-1.5 px-3 text-right font-mono text-[var(--ink-soft)]">${x.offTime}</td>
+        <td class="py-1.5 px-3 text-right font-mono">${x.adrs}</td>
+        <td class="py-1.5 px-3 text-right font-mono ${x.severe > 0 ? 'text-[var(--severe)] font-bold' : ''}">${x.severe}</td>
+      </tr>`).join('');
+
+  // ---- Drug stats (per ADR entry across cases) ----
+  const drugAgg = {};
+  const drugGroupAgg = {};
+  const reactionAgg = {};
+  const severityMix = { mild: 0, moderate: 0, severe: 0, unknown: 0 };
+  stats.forEach(s => {
+    (s.adrEntries || []).forEach(a => {
+      // drug
+      if (a.drug) {
+        if (!drugAgg[a.drug]) drugAgg[a.drug] = { count: 0, severe: 0 };
+        drugAgg[a.drug].count += 1;
+        if (a.isSevere) drugAgg[a.drug].severe += 1;
+      }
+      // group
+      const g = a.drugGroupLabel || '(unknown)';
+      if (!drugGroupAgg[g]) drugGroupAgg[g] = { count: 0, severe: 0 };
+      drugGroupAgg[g].count += 1;
+      if (a.isSevere) drugGroupAgg[g].severe += 1;
+      // reaction
+      if (a.reaction) reactionAgg[a.reaction] = (reactionAgg[a.reaction] || 0) + 1;
+      // severity
+      const sv = a.severity || (a.isSevere ? 'severe' : 'unknown');
+      severityMix[sv] = (severityMix[sv] || 0) + 1;
+    });
+  });
+
+  const sortedDrugs = Object.entries(drugAgg).sort((a,b) => b[1].count - a[1].count);
+  document.getElementById('statByDrug').innerHTML = sortedDrugs.length === 0
+    ? '<tr><td colspan="3" class="text-center text-gray-400 py-3">— ยังไม่มีข้อมูล —</td></tr>'
+    : sortedDrugs.slice(0, 30).map(([d, x]) => `<tr class="border-b border-[var(--line)]">
+        <td class="py-1.5 px-3">${escapeHtml(d)}</td>
+        <td class="py-1.5 px-3 text-right font-mono">${x.count}</td>
+        <td class="py-1.5 px-3 text-right font-mono ${x.severe > 0 ? 'text-[var(--severe)] font-bold' : ''}">${x.severe || ''}</td>
+      </tr>`).join('');
+
+  const sortedGroups = Object.entries(drugGroupAgg).sort((a,b) => b[1].count - a[1].count);
+  document.getElementById('statByDrugGroup').innerHTML = sortedGroups.length === 0
+    ? '<tr><td colspan="3" class="text-center text-gray-400 py-3">— ยังไม่มีข้อมูล —</td></tr>'
+    : sortedGroups.slice(0, 20).map(([g, x]) => `<tr class="border-b border-[var(--line)]">
+        <td class="py-1.5 px-3">${escapeHtml(g)}</td>
+        <td class="py-1.5 px-3 text-right font-mono">${x.count}</td>
+        <td class="py-1.5 px-3 text-right font-mono ${x.severe > 0 ? 'text-[var(--severe)] font-bold' : ''}">${x.severe || ''}</td>
+      </tr>`).join('');
+
+  const sortedReactions = Object.entries(reactionAgg).sort((a,b) => b[1] - a[1]);
+  document.getElementById('statTopReactions').innerHTML = sortedReactions.length === 0
+    ? '<tr><td colspan="2" class="text-center text-gray-400 py-3">— ยังไม่มีข้อมูล —</td></tr>'
+    : sortedReactions.slice(0, 15).map(([r, c]) => `<tr class="border-b border-[var(--line)]">
+        <td class="py-1.5 px-3">${escapeHtml(r)}</td>
+        <td class="py-1.5 px-3 text-right font-mono">${c}</td>
+      </tr>`).join('');
+
+  // ---- All cases table ----
+  const p4pInList = stats.filter(s => s.isP4P).length;
+  document.getElementById('caseCount').textContent = `${stats.length} cases · ★ P4P ${p4pInList}`;
+  const sortedCases = [...stats].sort((a,b) => (b.evalDate || '').localeCompare(a.evalDate || ''));
+  document.getElementById('statCases').innerHTML = sortedCases.length === 0
+    ? '<tr><td colspan="11" class="text-center text-gray-400 py-3">— ยังไม่มีข้อมูล —</td></tr>'
+    : sortedCases.map(s => `<tr class="${s.hasSevere ? 'bg-red-50' : ''} border-b border-[var(--line)]">
+        <td class="py-1.5 px-2 mono text-xs">${formatThaiDate(s.evalDate)}</td>
+        <td class="py-1.5 px-2 text-center text-xs">${s.isP4P ? '<span class="text-[var(--accent)] font-bold" title="P4P (ในเวลา)">★</span>' : '<span class="text-[var(--ink-soft)]" title="นอกเวลา">·</span>'}</td>
+        <td class="py-1.5 px-2 mono text-xs">${escapeHtml(s.hn || '-')}</td>
+        <td class="py-1.5 px-2 mono text-xs">${escapeHtml(s.an || '-')}</td>
+        <td class="py-1.5 px-2">${escapeHtml(s.name || '-')}</td>
+        <td class="py-1.5 px-2 text-xs">${escapeHtml(s.ward || '-')}</td>
+        <td class="py-1.5 px-2 text-xs">${escapeHtml(s.drugs || '-')}</td>
+        <td class="py-1.5 px-2 text-xs">${escapeHtml(s.student || '')}</td>
+        <td class="py-1.5 px-2 text-xs">${escapeHtml(s.pharmacist || '-')}</td>
+        <td class="py-1.5 px-2 text-center">${s.hasSevere ? '⚠️' : ''}</td>
+        <td class="py-1.5 px-2 text-right"><button class="text-red-600 hover:underline text-xs" data-delete-case="${escapeHtml(s.caseKey || '')}">ลบ</button></td>
+      </tr>`).join('');
+
+  // bind delete buttons
+  document.querySelectorAll('[data-delete-case]').forEach(btn => {
+    btn.onclick = () => {
+      if (!confirm('ลบเคสนี้?')) return;
+      StatsStore.remove(btn.dataset.deleteCase);
+      renderDashboard();
+      showToast('ลบแล้ว');
+    };
+  });
+
+  // ---- CHARTS ----
+  destroyCharts();
+  if (typeof Chart === 'undefined') return; // Chart.js not loaded yet
+
+  // Build trend (always over ALL stats, regardless of month filter, but respect pharmacist filter)
+  const trendStats = allStats.filter(s => !dashState.pharmacist || s.pharmacist === dashState.pharmacist);
+  const trendByMonth = {};
+  const trendSevere = {};
+  trendStats.forEach(s => {
+    const m = s.yearMonth || s.evalDate?.slice(0,7);
+    if (!m) return;
+    trendByMonth[m] = (trendByMonth[m] || 0) + 1;
+    trendSevere[m] = (trendSevere[m] || 0) + (s.hasSevere ? 1 : 0);
+  });
+  const sortedMonths = Object.keys(trendByMonth).sort();
+  const trendCtx = document.getElementById('chartTrend');
+  if (trendCtx && sortedMonths.length > 0) {
+    dashState.charts.trend = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: sortedMonths.map(formatMonthLabel),
+        datasets: [
+          { label: 'Total Cases', data: sortedMonths.map(m => trendByMonth[m]), borderColor: '#b91c4d', backgroundColor: 'rgba(185,28,77,0.1)', tension: 0.3, fill: true },
+          { label: 'Severe ADR', data: sortedMonths.map(m => trendSevere[m] || 0), borderColor: '#7f1d1d', backgroundColor: 'rgba(127,29,29,0.1)', tension: 0.3, fill: false, borderDash: [5,5] },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { family: 'Sarabun', size: 12 } } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+
+  // Top drugs chart (filtered)
+  const topDrugsCtx = document.getElementById('chartTopDrugs');
+  if (topDrugsCtx && sortedDrugs.length > 0) {
+    const top = sortedDrugs.slice(0, 10);
+    dashState.charts.topDrugs = new Chart(topDrugsCtx, {
+      type: 'bar',
+      data: {
+        labels: top.map(d => d[0]),
+        datasets: [{
+          label: 'Cases',
+          data: top.map(d => d[1].count),
+          backgroundColor: top.map(d => d[1].severe > 0 ? '#7f1d1d' : '#b91c4d'),
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { ticks: { font: { family: 'Sarabun' } } } }
+      }
+    });
+  }
+
+  // Severity pie
+  const sevCtx = document.getElementById('chartSeverity');
+  const sevTotal = Object.values(severityMix).reduce((a,b) => a+b, 0);
+  if (sevCtx && sevTotal > 0) {
+    dashState.charts.severity = new Chart(sevCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Mild', 'Moderate', 'Severe', 'Unknown'],
+        datasets: [{
+          data: [severityMix.mild || 0, severityMix.moderate || 0, severityMix.severe || 0, severityMix.unknown || 0],
+          backgroundColor: ['#86efac', '#fdba74', '#7f1d1d', '#d4d4d4'],
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { family: 'Sarabun', size: 12 } } } },
+      }
+    });
+  }
+
+  // Pharmacist chart
+  const phCtx = document.getElementById('chartPharmacist');
+  if (phCtx && sortedPharm.length > 0) {
+    dashState.charts.pharmacist = new Chart(phCtx, {
+      type: 'bar',
+      data: {
+        labels: sortedPharm.map(p => p[0]),
+        datasets: [
+          { label: 'Cases', data: sortedPharm.map(p => p[1].cases), backgroundColor: '#b91c4d' },
+          { label: 'Severe', data: sortedPharm.map(p => p[1].severe), backgroundColor: '#7f1d1d' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { family: 'Sarabun', size: 12 } } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+}
+
+function formatMonthLabel(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  if (!m) return ym;
+  const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return `${months[parseInt(m)-1]} ${y}`;
+}
+
+function buildSmartSummary(stats, scopeLabel) {
+  if (stats.length === 0) {
+    return `<b>📋 สรุป ${escapeHtml(scopeLabel)}:</b> ยังไม่มีข้อมูลในช่วงเวลาที่เลือก — เริ่มบันทึกเคสได้โดยกรอกฟอร์มและกด Export PDF หรือ Save Draft`;
+  }
+  const total = stats.length;
+  const severe = stats.filter(s => s.hasSevere).length;
+  const p4p = stats.filter(s => s.isP4P).length;
+  const offTime = stats.filter(s => !s.isInTime).length;
+
+  // top drug from ADR entries
+  const drugCount = {};
+  const groupCount = {};
+  stats.forEach(s => (s.adrEntries || []).forEach(a => {
+    if (a.drug) drugCount[a.drug] = (drugCount[a.drug] || 0) + 1;
+    if (a.drugGroupLabel) groupCount[a.drugGroupLabel] = (groupCount[a.drugGroupLabel] || 0) + 1;
+  }));
+  const topDrug = Object.entries(drugCount).sort((a,b) => b[1]-a[1])[0];
+  const topGroup = Object.entries(groupCount).sort((a,b) => b[1]-a[1])[0];
+
+  // top pharmacist (by P4P first, fall back to total)
+  const phCount = {};
+  stats.forEach(s => {
+    if (!phCount[s.pharmacist]) phCount[s.pharmacist] = { total: 0, p4p: 0 };
+    phCount[s.pharmacist].total += 1;
+    if (s.isP4P) phCount[s.pharmacist].p4p += 1;
+  });
+  const topPh = Object.entries(phCount).sort((a,b) => b[1].p4p - a[1].p4p || b[1].total - a[1].total)[0];
+
+  const parts = [];
+  parts.push(`<b>📋 สรุป ${escapeHtml(scopeLabel)}</b>`);
+  parts.push(`พบ ADR ทั้งหมด <b>${total} เคส</b>`);
+  parts.push(`<span class="text-[var(--accent)]">★ P4P (ในเวลา) <b>${p4p} เคส</b></span> · นอกเวลา ${offTime} เคส`);
+  if (severe > 0) parts.push(`<span class="text-[var(--severe)]">severe ADR <b>${severe} เคส</b> (${(severe/total*100).toFixed(1)}%)</span>`);
+  if (topDrug) parts.push(`ยาที่พบมากที่สุดคือ <b>${escapeHtml(topDrug[0])}</b> จำนวน <b>${topDrug[1]} เคส</b>`);
+  if (topGroup && (!topDrug || topGroup[0] !== topDrug[0])) parts.push(`กลุ่มยาที่พบมากที่สุดคือ <b>${escapeHtml(topGroup[0])}</b> (${topGroup[1]} รายการ)`);
+  if (topPh && !dashState.pharmacist) parts.push(`เภสัชกรที่ทำ P4P มากที่สุด: <b>${escapeHtml(topPh[0])}</b> (P4P ${topPh[1].p4p} เคส)`);
+  return parts.join(' · ');
+}
+
+document.getElementById('btnDashboardClose').onclick = () => {
+  document.getElementById('dashboardModal').classList.add('hidden');
+  destroyCharts();
+};
+
+document.getElementById('btnPrintDashboard').onclick = () => {
+  // Switch to overview tab to capture full content, then print
+  document.querySelector('[data-dtab="overview"]').click();
+  setTimeout(() => window.print(), 300);
+};
+
+/* ============================================================
+   EXPORT FUNCTIONS — CSV / Excel / Pivot
+   ============================================================ */
+function buildCaseRows(stats) {
+  const headers = ['evalDate','yearMonth','year','timestamp','hn','an','name','ward','student','pharmacist','shift','isInTime','isP4P','drugCount','drugs','drugGroups','reactions','severityMix','hasSevere','source','trigger'];
+  const rows = [headers];
+  stats.forEach(s => {
+    rows.push(headers.map(h => {
+      const val = s[h];
+      if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+      return val ?? '';
+    }));
+  });
+  return rows;
+}
+
+document.getElementById('btnExportCSV').onclick = () => {
+  const stats = applyDashFilter(getStats());
+  if (stats.length === 0) { showToast('ไม่มีข้อมูลให้ export'); return; }
+  const rows = buildCaseRows(stats);
+  const csv = '\ufeff' + rows.map(r => r.map(v => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  downloadFile(csv, `pharmacist_workload_${dashState.scope}_${todayISO()}.csv`, 'text/csv;charset=utf-8');
+  showToast('Export CSV แล้ว ✓');
+};
+
+document.getElementById('btnExportXLS').onclick = () => {
+  const stats = applyDashFilter(getStats());
+  if (stats.length === 0) { showToast('ไม่มีข้อมูลให้ export'); return; }
+  const rows = buildCaseRows(stats);
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body><table border="1">`;
+  html += rows.map((r,i) => '<tr>' + r.map(v => i === 0 ? `<th>${escapeHtml(String(v))}</th>` : `<td>${escapeHtml(String(v))}</td>`).join('') + '</tr>').join('');
+  html += '</table></body></html>';
+  downloadFile(html, `pharmacist_workload_${dashState.scope}_${todayISO()}.xls`, 'application/vnd.ms-excel');
+  showToast('Export Excel แล้ว ✓');
+};
+
+document.getElementById('btnExportPivot').onclick = () => {
+  const stats = applyDashFilter(getStats());
+  if (stats.length === 0) { showToast('ไม่มีข้อมูลให้ export'); return; }
+
+  // Build 4 sheets in one Excel-XML file
+  const buildTable = (title, headers, rows) => {
+    return `<h3>${escapeHtml(title)}</h3><table border="1"><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map(v => `<td>${escapeHtml(String(v ?? ''))}</td>`).join('')}</tr>`).join('')}</table><br/>`;
+  };
+
+  // 1. By pharmacist (with P4P breakdown)
+  const phAgg = {};
+  stats.forEach(s => {
+    const p = s.pharmacist || '(ไม่ระบุ)';
+    if (!phAgg[p]) phAgg[p] = { cases:0, p4p:0, offTime:0, adrs:0, severe:0 };
+    phAgg[p].cases += 1;
+    phAgg[p].adrs += (s.drugCount || 0);
+    if (s.isP4P) phAgg[p].p4p += 1;
+    if (!s.isInTime) phAgg[p].offTime += 1;
+    if (s.hasSevere) phAgg[p].severe += 1;
+  });
+  const phRows = Object.entries(phAgg).sort((a,b) => b[1].p4p - a[1].p4p || b[1].cases - a[1].cases)
+    .map(([p,x]) => [p, x.cases, x.p4p, x.offTime, x.adrs, x.severe]);
+
+  // 2. By drug
+  const dAgg = {};
+  stats.forEach(s => (s.adrEntries || []).forEach(a => {
+    if (!a.drug) return;
+    if (!dAgg[a.drug]) dAgg[a.drug] = { count:0, severe:0, group:a.drugGroupLabel || '' };
+    dAgg[a.drug].count += 1;
+    if (a.isSevere) dAgg[a.drug].severe += 1;
+  }));
+  const dRows = Object.entries(dAgg).sort((a,b) => b[1].count - a[1].count)
+    .map(([d,x]) => [d, x.group, x.count, x.severe]);
+
+  // 3. By drug group
+  const gAgg = {};
+  stats.forEach(s => (s.adrEntries || []).forEach(a => {
+    const g = a.drugGroupLabel || '(unknown)';
+    if (!gAgg[g]) gAgg[g] = { count:0, severe:0 };
+    gAgg[g].count += 1;
+    if (a.isSevere) gAgg[g].severe += 1;
+  }));
+  const gRows = Object.entries(gAgg).sort((a,b) => b[1].count - a[1].count)
+    .map(([g,x]) => [g, x.count, x.severe]);
+
+  // 4. By month (with P4P breakdown)
+  const mAgg = {};
+  stats.forEach(s => {
+    const m = s.yearMonth || s.evalDate?.slice(0,7);
+    if (!m) return;
+    if (!mAgg[m]) mAgg[m] = { cases:0, p4p:0, offTime:0, severe:0, adrs:0 };
+    mAgg[m].cases += 1;
+    mAgg[m].adrs += (s.drugCount || 0);
+    if (s.isP4P) mAgg[m].p4p += 1;
+    if (!s.isInTime) mAgg[m].offTime += 1;
+    if (s.hasSevere) mAgg[m].severe += 1;
+  });
+  const mRows = Object.entries(mAgg).sort()
+    .map(([m,x]) => [m, x.cases, x.p4p, x.offTime, x.adrs, x.severe]);
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"><style>table{border-collapse:collapse;margin-bottom:20px}th,td{padding:4px 8px;font-family:Sarabun,sans-serif}h3{font-family:Sarabun;margin:10px 0 4px 0}</style></head>
+    <body>
+      <h2>P4P Pivot Report — ${escapeHtml(dashState.scope === 'month' ? formatMonthLabel(dashState.month) : dashState.scope === 'year' ? 'ปี '+dashState.year : 'ทั้งหมด')}</h2>
+      <p style="font-family:Sarabun;font-size:12px;color:#444">★ P4P นับเฉพาะ "ในเวลา" · 1 encounter = 1 case</p>
+      ${buildTable('สรุปตามเภสัชกร', ['เภสัชกร','Total','★ P4P (ในเวลา)','นอกเวลา','ADR Entries','Severe'], phRows)}
+      ${buildTable('สรุปตามยา', ['ชื่อยา','กลุ่ม','เคส','Severe'], dRows)}
+      ${buildTable('สรุปตามกลุ่มยา', ['กลุ่มยา','เคส','Severe'], gRows)}
+      ${buildTable('สรุปตามเดือน', ['เดือน','Total','★ P4P','นอกเวลา','ADR Entries','Severe'], mRows)}
+    </body></html>`;
+  downloadFile(html, `P4P_Pivot_${dashState.scope}_${todayISO()}.xls`, 'application/vnd.ms-excel');
+  showToast('Export Pivot Excel แล้ว ✓');
+};
+
+document.getElementById('btnClearStats').onclick = () => {
+  if (!confirm('ลบข้อมูลสถิติทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
+  localStorage.removeItem(STATS_KEY);
+  renderDashboard();
+  showToast('ลบข้อมูลแล้ว');
+};
+
+document.getElementById('btnRecordManually').onclick = () => {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  if (state.drugs.filter(d => d.drug).length === 0) {
+    showToast('ยังไม่มีข้อมูลยาที่แพ้');
+    return;
+  }
+  if (!v('pharmacist')) {
+    showToast('กรุณากรอกชื่อเภสัชกรก่อน');
+    return;
+  }
+  recordCase({ trigger: 'manual' });
+  renderDashboard();
+  showToast('บันทึกข้อมูลในสถิติแล้ว ✓');
+};
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btnCopyNote').onclick = async () => {
+  await navigator.clipboard.writeText(document.getElementById('quickNote').value);
+  recordCase({ trigger: 'copy_note' });
+  showToast('คัดลอก note แล้ว ✓');
+};
+document.getElementById('btnCopyQuick').onclick = async () => {
+  await navigator.clipboard.writeText(document.getElementById('quickNote').value);
+  recordCase({ trigger: 'copy_note' });
+  showToast('คัดลอกแล้ว ✓');
+};
+
+/* ============================================================
+   DRAFT SAVE / LOAD (LocalStorage)
+   ============================================================ */
+function getFormSnapshot() {
+  const ids = ['hn','an','name','age','ward','source','evalDate','pharmacist','student','shift','recAvoid','recCaution','recAlt',
+               'cardNo','cardType','cardHospital','cardIssueDate','adrOnsetDate','prevEvaluator'];
+  const snap = {};
+  ids.forEach(id => snap[id] = document.getElementById(id).value);
+  snap.hasCard = document.querySelector('input[name="hasCard"]:checked')?.value || '';
+  snap.drugs = state.drugs;
+  return snap;
+}
+function loadSnapshot(snap) {
+  Object.keys(snap).forEach(k => {
+    if (k === 'drugs' || k === 'hasCard') return;
+    const el = document.getElementById(k);
+    if (el) el.value = snap[k] || '';
+  });
+  if (snap.hasCard) {
+    const radio = document.querySelector(`input[name="hasCard"][value="${snap.hasCard}"]`);
+    if (radio) radio.checked = true;
+  }
+  state.drugs = snap.drugs || [];
+  if (state.drugs.length === 0) state.drugs.push({drug:'',reaction:'',severity:'',note:'',onset:'',management:'',outcome:''});
+  renderDrugList();
+  autoUpdateAll();
+}
+document.getElementById('btnSaveDraft').onclick = () => {
+  localStorage.setItem('pharmAllergyDraft', JSON.stringify(getFormSnapshot()));
+  recordCase({ trigger: 'save_draft' });
+  showToast('บันทึก draft แล้ว ✓');
+};
+document.getElementById('btnLoadDraft').onclick = () => {
+  const d = localStorage.getItem('pharmAllergyDraft');
+  if (!d) { showToast('ไม่มี draft ที่บันทึกไว้'); return; }
+  loadSnapshot(JSON.parse(d));
+  showToast('โหลด draft แล้ว ✓');
+};
+
+/* ============================================================
+   REF PANEL TOGGLE
+   ============================================================ */
+document.getElementById('btnRefToggle').onclick = () => {
+  document.getElementById('refPanel').classList.toggle('hidden');
+};
+
+/* ============================================================
+   INPUT LISTENERS for header fields → live preview
+   ============================================================ */
+['hn','an','name','age','ward','source','evalDate','pharmacist','student','shift','recCaution','recAlt',
+ 'cardNo','cardType','cardHospital','cardIssueDate','adrOnsetDate','prevEvaluator'].forEach(id => {
+  document.getElementById(id).addEventListener('input', autoUpdateAll);
+  document.getElementById(id).addEventListener('change', autoUpdateAll);
+});
+document.querySelectorAll('input[name="hasCard"]').forEach(r => r.addEventListener('change', autoUpdateAll));
+document.getElementById('recAvoid').addEventListener('input', () => {
+  updatePreview();
+  updateQuickNote();
+});
+
+/* ============================================================
+   PHARMACIST SEARCHABLE DROPDOWN
+   ============================================================ */
+function setupPharmacistCombo() {
+  const input = document.getElementById('pharmacist');
+  const list = document.getElementById('pharmacistList');
+  if (!input || !list) return;
+
+  function renderList(query = '') {
+    const all = PharmacistRegistry.list();
+    const q = query.trim().toLowerCase();
+    const filtered = q ? all.filter(n => n.toLowerCase().includes(q)) : all;
+
+    let html = '';
+    if (filtered.length === 0 && q) {
+      html += `<div class="combo-item italic text-[var(--ink-soft)]" data-add-new="${escapeHtml(query.trim())}">
+        ➕ เพิ่ม "<b>${escapeHtml(query.trim())}</b>" เป็นเภสัชกรใหม่
+      </div>`;
+    } else {
+      html += filtered.map(n => `
+        <div class="combo-item flex items-center justify-between" data-pharm="${escapeHtml(n)}">
+          <span>${escapeHtml(n)}</span>
+          <button class="text-xs text-red-500 hover:text-red-700 ml-2 px-2" data-remove-pharm="${escapeHtml(n)}" title="ลบจากรายการ">✕</button>
+        </div>
+      `).join('');
+      // Add-new option if query doesn't match exactly
+      if (q && !filtered.some(n => n.toLowerCase() === q)) {
+        html += `<div class="combo-item italic text-[var(--ink-soft)] border-t border-[var(--line)]" data-add-new="${escapeHtml(query.trim())}">
+          ➕ เพิ่ม "<b>${escapeHtml(query.trim())}</b>" เป็นเภสัชกรใหม่
+        </div>`;
+      }
+    }
+    // Always show "manage" button at bottom
+    html += `<div class="combo-item text-center text-xs text-[var(--ink-soft)] border-t border-[var(--line)] bg-[#fafaf7]" data-manage-pharm="1">
+      ⚙️ จัดการรายชื่อเภสัชกร
+    </div>`;
+    list.innerHTML = html;
+
+    // Bind: select pharmacist
+    list.querySelectorAll('[data-pharm]').forEach(el => {
+      el.onmousedown = (ev) => {
+        if (ev.target.dataset.removePharm) return; // delegated below
+        ev.preventDefault();
+        input.value = el.dataset.pharm;
+        list.classList.add('hidden');
+        autoUpdateAll();
+      };
+    });
+    // Bind: remove pharmacist
+    list.querySelectorAll('[data-remove-pharm]').forEach(btn => {
+      btn.onmousedown = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const n = btn.dataset.removePharm;
+        if (confirm(`ลบ "${n}" ออกจากรายการ?`)) {
+          PharmacistRegistry.remove(n);
+          renderList(input.value);
+        }
+      };
+    });
+    // Bind: add-new
+    list.querySelectorAll('[data-add-new]').forEach(el => {
+      el.onmousedown = (ev) => {
+        ev.preventDefault();
+        const newName = el.dataset.addNew;
+        if (PharmacistRegistry.add(newName)) {
+          input.value = newName;
+          showToast(`เพิ่ม "${newName}" แล้ว ✓`);
+        } else {
+          input.value = newName;
+        }
+        list.classList.add('hidden');
+        autoUpdateAll();
+      };
+    });
+    // Bind: manage
+    list.querySelectorAll('[data-manage-pharm]').forEach(el => {
+      el.onmousedown = (ev) => {
+        ev.preventDefault();
+        list.classList.add('hidden');
+        openPharmacistManager();
+      };
+    });
+  }
+
+  input.addEventListener('input', e => { renderList(e.target.value); list.classList.remove('hidden'); });
+  input.addEventListener('focus', e => { renderList(e.target.value); list.classList.remove('hidden'); });
+  input.addEventListener('blur', e => {
+    setTimeout(() => list.classList.add('hidden'), 250);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // pick first match
+      const first = list.querySelector('[data-pharm]') || list.querySelector('[data-add-new]');
+      if (first) first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+    }
+  });
+}
+
+function openPharmacistManager() {
+  document.getElementById('pharmManagerModal').classList.remove('hidden');
+  renderPharmManagerList();
+}
+function renderPharmManagerList() {
+  const list = PharmacistRegistry.list();
+  const c = document.getElementById('pharmManagerList');
+  c.innerHTML = list.length === 0
+    ? '<div class="text-center text-[var(--ink-soft)] py-4">— ไม่มีรายชื่อ —</div>'
+    : list.map(n => `
+        <div class="flex items-center justify-between border-b border-[var(--line)] py-2 px-1">
+          <span>${escapeHtml(n)}</span>
+          <button class="text-red-500 hover:text-red-700 text-sm" data-rm="${escapeHtml(n)}">🗑 ลบ</button>
+        </div>
+      `).join('');
+  c.querySelectorAll('[data-rm]').forEach(b => {
+    b.onclick = () => {
+      if (confirm(`ลบ "${b.dataset.rm}" ?`)) {
+        PharmacistRegistry.remove(b.dataset.rm);
+        renderPharmManagerList();
+      }
+    };
+  });
+}
+
+setTimeout(() => {
+  // Wait for DOM ready
+  setupPharmacistCombo();
+
+  // Bind manager modal buttons
+  const closeBtn = document.getElementById('btnPharmManagerClose');
+  if (closeBtn) closeBtn.onclick = () => document.getElementById('pharmManagerModal').classList.add('hidden');
+
+  const addBtn = document.getElementById('btnPharmManagerAdd');
+  if (addBtn) addBtn.onclick = () => {
+    const inp = document.getElementById('pharmManagerNew');
+    const name = inp.value.trim();
+    if (!name) { showToast('กรอกชื่อก่อน'); return; }
+    if (PharmacistRegistry.add(name)) {
+      showToast(`เพิ่ม "${name}" แล้ว ✓`);
+      inp.value = '';
+      renderPharmManagerList();
+    } else {
+      showToast('ชื่อนี้มีอยู่แล้ว');
+    }
+  };
+
+  const resetBtn = document.getElementById('btnPharmManagerReset');
+  if (resetBtn) resetBtn.onclick = () => {
+    if (!confirm('คืนค่ารายชื่อเภสัชกรเริ่มต้น?')) return;
+    PharmacistRegistry.reset();
+    renderPharmManagerList();
+    showToast('คืนค่าแล้ว ✓');
+  };
+
+  const inp = document.getElementById('pharmManagerNew');
+  if (inp) inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btnPharmManagerAdd').click();
+  });
+}, 100);
+
+/* ============================================================
+   INIT
+   ============================================================ */
+setDefaultDate();
+renderQuickDrugs();
+addDrugRow();
+autoUpdateAll();
+</script>
+
+</body>
+</html>
