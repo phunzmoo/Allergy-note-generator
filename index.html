@@ -2092,51 +2092,66 @@ const PRINT_CSS = `
 `;
 
 document.getElementById('btnPrint').onclick = () => {
-  const printContent = document.getElementById('printArea').innerHTML;
+  // Build full document HTML using the SHARED template builder
+  const html = buildPrintableHTML();
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
-    <title>Allergy Note</title>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>${PRINT_CSS}</style>
-    </head><body>${printContent}</body></html>`);
+  if (!w) { showToast('เปิดหน้าต่างพิมพ์ไม่ได้ — ตรวจสอบ popup blocker'); return; }
+  w.document.write(html);
   w.document.close();
-  // Wait for fonts to load before printing — prevents font-shift
+  // Wait for fonts before print
+  const doPrint = () => { w.focus(); w.print(); };
   setTimeout(() => {
     if (w.document.fonts && w.document.fonts.ready) {
-      w.document.fonts.ready.then(() => { w.focus(); w.print(); });
-    } else {
-      w.focus(); w.print();
-    }
-  }, 700);
+      w.document.fonts.ready.then(doPrint).catch(doPrint);
+    } else { doPrint(); }
+  }, 800);
 };
 
-document.getElementById('btnExportPdf').onclick = async () => {
+// Shared HTML builder — used by both Print and Export PDF
+function buildPrintableHTML() {
   const v = (id) => (document.getElementById(id)?.value || '').trim();
-  const filename = `แบบฟอร์มประเมินแพ้ยา_${v('hn') || 'NEW'}_${v('name') || 'patient'}_${v('evalDate') || todayISO()}.pdf`;
-  showToast('กำลังสร้าง PDF...');
-
-  // ============================================================
-  // PDF EXPORT — rebuild as simple block-layout HTML
-  // (Avoids html2canvas flex/clipping bugs with Thai text)
-  // ============================================================
   const dateStr = v('evalDate') ? formatThaiDate(v('evalDate')) : '';
   const cardIssueStr = v('cardIssueDate') ? formatThaiDate(v('cardIssueDate')) : '';
   const cardStatus = document.querySelector('input[name="hasCard"]:checked')?.value || '';
   const cs = (label) => cardStatus === label ? '☑' : '☐';
   const validDrugs = state.drugs.filter(d => d.drug);
 
-  // Inline label + dotted underline value (same line)
-  const fld = (label, val, w) =>
-    `<span style="font-weight:600">${label}</span>` +
-    `<span style="display:inline-block;border-bottom:1px dotted #555;padding:0 5px 1px 5px;min-width:${w};margin:0 8px 0 4px;">${escapeHtml(val || ' ')}</span>`;
+  // ─── Row builders ────────────────────────────────────────────────────────
+  // All rows use a 2-column <dl>-style pair: label (auto) + value (1fr).
+  // No nested tables — avoids compounding width bugs.
 
-  // Single full-width field (label + value spanning the rest of the row)
-  const fullFld = (label, val) => `
-    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
-      <span style="font-weight:600">${label}</span>
-      <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;min-width:380px;margin-left:6px">${escapeHtml(val || ' ')}</span>
+  // Full-width row: label on same line, value spans rest
+  const row1 = (label, val) => `
+    <div class="frow">
+      <span class="flbl">${label}</span>
+      <span class="fval">${escapeHtml(val || '\u00A0')}</span>
     </div>`;
 
+  // 4-short-fields row (HN/AN/อายุ/ตึก): rendered as a 4-column grid
+  const row4 = (cells) => `
+    <div class="row4">
+      ${cells.map(([lbl, val]) =>
+        `<span class="flbl">${lbl}</span><span class="fval">${escapeHtml(val || '\u00A0')}</span>`
+      ).join('')}
+    </div>`;
+
+  // 2-field row: left half + right half
+  const row2 = (lbl1, val1, lbl2, val2) => `
+    <div class="row2">
+      <div class="row2-half">
+        <span class="flbl">${lbl1}</span>
+        <span class="fval">${escapeHtml(val1 || '\u00A0')}</span>
+      </div>
+      <div class="row2-half">
+        <span class="flbl">${lbl2}</span>
+        <span class="fval">${escapeHtml(val2 || '\u00A0')}</span>
+      </div>
+    </div>`;
+
+  // Section heading
+  const h2 = (txt) => `<div class="sect-h2">${txt}</div>`;
+
+  // ─── ADR drug entries ─────────────────────────────────────────────────────
   const drugBlocks = validDrugs.length === 0
     ? '<div style="color:#666;padding:6px 0">— ยังไม่มีข้อมูลยาที่แพ้ —</div>'
     : validDrugs.map((d, i) => {
@@ -2144,107 +2159,265 @@ document.getElementById('btnExportPdf').onclick = async () => {
         const detail = [reactionLabel, d.note].filter(Boolean).join(' — ');
         const meta = [];
         if (d.severity) meta.push(`Severity: ${d.severity}`);
-        if (d.onset) meta.push(`Onset: ${d.onset}`);
-        if (d.outcome) meta.push(`Outcome: ${d.outcome}`);
+        if (d.onset)    meta.push(`Onset: ${d.onset}`);
+        if (d.outcome)  meta.push(`Outcome: ${d.outcome}`);
         return `
-          <div style="margin:0 0 8px 0;page-break-inside:avoid">
-            <div style="margin:0 0 2px 0;line-height:1.6">
-              <span style="font-weight:600">รายการยาที่ ${i+1} :</span>
-              <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;margin-left:6px;min-width:340px">${escapeHtml(d.drug)}</span>
+          <div class="adr-block">
+            <div class="frow">
+              <span class="flbl"><b>รายการยาที่ ${i+1}&nbsp;:</b></span>
+              <span class="fval">${escapeHtml(d.drug)}</span>
             </div>
-            <div style="margin:0 0 2px 0;padding-left:14px;line-height:1.6">
-              <span style="font-weight:600">อาการ :</span>
-              <span style="display:inline-block;border-bottom:1px dotted #555;padding:0 6px 1px 6px;margin-left:6px;min-width:400px">${escapeHtml(detail)}</span>
+            <div class="frow" style="padding-left:14px">
+              <span class="flbl">อาการ&nbsp;:</span>
+              <span class="fval">${escapeHtml(detail || '\u00A0')}</span>
             </div>
-            ${meta.length ? `<div style="padding-left:14px;font-size:11px;color:#222">${escapeHtml(meta.join(' | '))}</div>` : ''}
-            ${d.management ? `<div style="padding-left:14px;font-size:11px;color:#222"><i>Management:</i> ${escapeHtml(d.management)}</div>` : ''}
+            ${meta.length ? `<div class="adr-meta">${escapeHtml(meta.join(' \u2502 '))}</div>` : ''}
+            ${d.management ? `<div class="adr-meta"><i>Management:</i> ${escapeHtml(d.management)}</div>` : ''}
           </div>`;
       }).join('');
 
-  const html = `
-    <div style="text-align:center;margin:0 0 12px 0;page-break-inside:avoid">
-      <div style="font-size:16px;font-weight:700;line-height:1.3">แบบฟอร์มการประเมินประวัติแพ้ยาผู้ป่วยใน</div>
-      <div style="font-size:12px;line-height:1.3;margin-top:2px">โรงพยาบาลพระนครศรีอยุธยา · ห้องยาผู้ป่วยใน</div>
-      <div style="border-top:1px solid #000;margin-top:8px"></div>
+  // ─── Page body ────────────────────────────────────────────────────────────
+  const body = `
+    <div class="hdr">
+      <div class="hdr-title">แบบฟอร์มการประเมินประวัติแพ้ยาผู้ป่วยใน</div>
+      <div class="hdr-sub">โรงพยาบาลพระนครศรีอยุธยา · ห้องยาผู้ป่วยใน</div>
+      <div class="hdr-line"></div>
     </div>
 
-    ${fullFld('ชื่อ-นามสกุล :', v('name'))}
-    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
-      ${fld('HN :', v('hn'), '70px')}${fld('AN :', v('an'), '80px')}${fld('อายุ :', v('age'), '60px')}${fld('ตึก/หอ :', v('ward'), '110px')}
-    </div>
-    ${fullFld('แหล่งที่มาของข้อมูล :', v('source'))}
+    ${row1('ชื่อ-นามสกุล&nbsp;:', v('name'))}
+    ${row4([['HN&nbsp;:',v('hn')],['AN&nbsp;:',v('an')],['อายุ&nbsp;:',v('age')],['ตึก/หอ&nbsp;:',v('ward')]])}
+    ${row1('แหล่งที่มาของข้อมูล&nbsp;:', v('source'))}
 
-    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">ข้อมูลบัตรแพ้ยาผู้ป่วย</div>
-    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
-      ${fld('บัตรแพ้ยา/บัตรเตือน ออกโดย :', v('cardHospital'), '170px')}${fld('วันที่ออกบัตร :', cardIssueStr, '90px')}
-    </div>
-    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
-      ${fld('เลขที่บัตร :', v('cardNo'), '120px')}${fld('ประเภทบัตร :', v('cardType'), '160px')}
-    </div>
-    <div style="margin:5px 0;font-size:12px;line-height:1.7">
+    ${h2('ข้อมูลบัตรแพ้ยาผู้ป่วย')}
+    ${row2('บัตรแพ้ยา/บัตรเตือน ออกโดย&nbsp;:', v('cardHospital'), 'วันที่ออกบัตร&nbsp;:', cardIssueStr)}
+    ${row2('เลขที่บัตร&nbsp;:', v('cardNo'), 'ประเภทบัตร&nbsp;:', v('cardType'))}
+    <div class="checkboxes">
       <div>${cs('มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย')} มีบัตรอยู่เดิม นำบัตรติดตัวมาด้วย &nbsp;&nbsp; ${cs('เคยมีบัตร แต่ชำรุด/หาย — ออกบัตรให้ใหม่')} เคยมีบัตร แต่ชำรุด/หาย → ออกบัตรให้ใหม่</div>
       <div>${cs('มีบัตรอยู่เดิม แต่ไม่ได้นำมา')} มีบัตรอยู่เดิม แต่ไม่ได้นำมา &nbsp;&nbsp; ${cs('ไม่เคยมีบัตร — ออกบัตรให้ใหม่')} ไม่เคยมีบัตร → ออกบัตรให้ใหม่</div>
     </div>
-    <div style="margin:0 0 5px 0;line-height:1.6;page-break-inside:avoid">
-      ${fld('วันที่เกิดอาการแพ้ยา :', v('adrOnsetDate'), '140px')}${fld('ผู้ประเมิน ADR เดิม :', v('prevEvaluator'), '160px')}
-    </div>
+    ${row2('วันที่เกิดอาการแพ้ยา&nbsp;:', v('adrOnsetDate'), 'ผู้ประเมิน ADR เดิม&nbsp;:', v('prevEvaluator'))}
 
-    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">Pharmacist's Note</div>
+    ${h2("Pharmacist's Note")}
     <div style="margin-bottom:6px">- ผู้ป่วยมีประวัติแพ้ยา / อาการข้างเคียงจากยา ดังนี้</div>
     ${drugBlocks}
 
-    <div style="font-size:13px;font-weight:700;margin:12px 0 6px 0;padding-bottom:2px;border-bottom:1px solid #666">รายละเอียดเพิ่มเติม / คำแนะนำการใช้ยา</div>
-    <div style="margin:6px 0 4px 0;font-weight:700">☐ แนะนำหลีกเลี่ยงการใช้ยา :</div>
-    <div style="border:1px dotted #555;padding:6px 8px;min-height:48px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recAvoid'))}</div>
+    ${h2('รายละเอียดเพิ่มเติม / คำแนะนำการใช้ยา')}
+    <div class="rec-label">☐ แนะนำหลีกเลี่ยงการใช้ยา&nbsp;:</div>
+    <div class="rec-box" style="min-height:48px">${escapeHtml(v('recAvoid'))}</div>
+    <div class="rec-label">☐ แนะนำระวังการใช้ยา&nbsp;:</div>
+    <div class="rec-box" style="min-height:28px">${escapeHtml(v('recCaution'))}</div>
+    <div class="rec-label">ยาข้างเคียงที่สามารถใช้ได้&nbsp;:</div>
+    <div class="rec-box" style="min-height:28px">${escapeHtml(v('recAlt'))}</div>
 
-    <div style="margin:10px 0 4px 0;font-weight:700">☐ แนะนำระวังการใช้ยา :</div>
-    <div style="border:1px dotted #555;padding:6px 8px;min-height:28px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recCaution'))}</div>
-
-    <div style="margin:10px 0 4px 0;font-weight:700">ยาข้างเคียงที่สามารถใช้ได้ :</div>
-    <div style="border:1px dotted #555;padding:6px 8px;min-height:28px;white-space:pre-wrap;word-wrap:break-word;line-height:1.6">${escapeHtml(v('recAlt'))}</div>
-
-    <div style="margin-top:24px;text-align:right;page-break-inside:avoid">
+    <div class="signature">
       ${v('student') ? `<div>นศภ. ผู้ประเมินเคส : <b>${escapeHtml(v('student'))}</b></div>` : ''}
       <div>เภสัชกรผู้ประเมิน : <b>${escapeHtml(v('pharmacist'))}</b></div>
       <div>วันที่ประเมิน : <b>${escapeHtml(dateStr)}</b></div>
     </div>
   `;
 
-  // Off-screen render container
-  const RENDER_WIDTH_PX = 720;          // ~190mm at 96dpi (safe for A4 - 15mm margins)
+  // ─── Full document ────────────────────────────────────────────────────────
+  // KEY: body max-width = 180mm (210mm A4 − 2×15mm margin) is the
+  // single source of truth for ALL width calculations.
+  // Both print (browser) and PDF export render this same HTML → consistent.
+  return `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+    <title>แบบฟอร์มประเมินแพ้ยา ${escapeHtml(v('name') || '')}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* ── Page setup ─────────────────────────────────── */
+      @page {
+        size: A4 portrait;
+        margin: 15mm;   /* printable = 180mm × 267mm */
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html {
+        /* Explicit A4 paper width so the browser never guesses */
+        width: 210mm;
+        background: #fff;
+      }
+      body {
+        /* Constrain to printable width — this is the ONE fixed reference */
+        width: 180mm;
+        max-width: 180mm;
+        margin: 0 auto;
+        padding: 0;
+        background: #fff;
+        color: #000;
+        font-family: 'Sarabun', system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        /* Prevent ANY element from pushing body wider */
+        overflow-x: hidden;
+      }
+
+      /* ── Global safety ──────────────────────────────── */
+      /* Every element is constrained; long words break instead of overflowing */
+      * {
+        max-width: 100%;
+        word-break: break-word;
+        overflow-wrap: break-word;
+      }
+
+      /* ── Header ─────────────────────────────────────── */
+      .hdr { text-align: center; margin-bottom: 10px; page-break-inside: avoid; }
+      .hdr-title { font-size: 16px; font-weight: 700; line-height: 1.3; }
+      .hdr-sub   { font-size: 12px; margin-top: 2px; }
+      .hdr-line  { border-top: 1px solid #000; margin-top: 6px; }
+
+      /* ── Section heading ────────────────────────────── */
+      .sect-h2 {
+        font-size: 13px; font-weight: 700;
+        margin: 12px 0 5px 0;
+        padding-bottom: 3px;
+        border-bottom: 1px solid #555;
+        page-break-after: avoid;
+      }
+
+      /* ── Field rows (flex-based, no nested tables) ──── */
+      /* A field row is: label (shrinks to content) + value (fills rest) */
+      .frow {
+        display: flex;
+        align-items: flex-end;
+        gap: 0;
+        margin-bottom: 4px;
+        page-break-inside: avoid;
+      }
+      .flbl {
+        /* Label: shrink to intrinsic width, never expand, never push row wider */
+        flex: 0 0 auto;
+        font-weight: 600;
+        padding-right: 6px;
+        /* Allow wrapping on very long labels */
+        white-space: normal;
+        max-width: 50%;
+      }
+      .fval {
+        /* Value: expand to fill remaining space with dotted underline */
+        flex: 1 1 0;
+        min-width: 0;           /* Critical: allows flex child to shrink below content */
+        border-bottom: 1px dotted #555;
+        padding: 1px 6px;
+        word-break: break-word;
+      }
+
+      /* 4-field row: EXACTLY 8 columns so all 4 pairs are on ONE line */
+      .row4 {
+        display: grid;
+        grid-template-columns: max-content minmax(0,1fr) max-content minmax(0,1fr) max-content minmax(0,1fr) max-content minmax(0,1fr);
+        align-items: end;
+        gap: 0 6px;
+        margin-bottom: 4px;
+        page-break-inside: avoid;
+      }
+      .row4 .flbl {
+        white-space: nowrap;
+        font-weight: 600;
+        padding-right: 2px;
+        max-width: none;
+      }
+      .row4 .fval { padding: 1px 4px; border-bottom: 1px dotted #555; min-width: 0; }
+
+      /* 2-field row: two halves, each a flex row */
+      .row2 {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 4px;
+        page-break-inside: avoid;
+      }
+      .row2-half {
+        display: flex;
+        align-items: flex-end;
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .row2-half .flbl { padding-right: 6px; max-width: 55%; }
+      .row2-half .fval { flex: 1 1 0; min-width: 0; border-bottom: 1px dotted #555; padding: 1px 4px; }
+
+      /* ── Checkboxes ─────────────────────────────────── */
+      .checkboxes {
+        font-size: 12px;
+        line-height: 1.8;
+        padding: 4px 0;
+        page-break-inside: avoid;
+        /* wrap long lines gracefully */
+        overflow-wrap: break-word;
+      }
+
+      /* ── ADR drug blocks ─────────────────────────────── */
+      .adr-block { page-break-inside: avoid; margin-bottom: 6px; }
+      .adr-meta  { padding-left: 14px; font-size: 11px; color: #222; }
+
+      /* ── Recommendation boxes ────────────────────────── */
+      .rec-label { font-weight: 700; padding: 8px 0 4px 0; page-break-after: avoid; }
+      .rec-box {
+        border: 1px dotted #555;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        line-height: 1.6;
+        page-break-inside: auto;   /* allow break inside if very long */
+      }
+
+      /* ── Signature ──────────────────────────────────── */
+      .signature { margin-top: 22px; text-align: right; page-break-inside: avoid; }
+    </style></head><body>${body}</body></html>`;
+}
+
+document.getElementById('btnExportPdf').onclick = async () => {
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const filename = `แบบฟอร์มประเมินแพ้ยา_${v('hn') || 'NEW'}_${v('name') || 'patient'}_${v('evalDate') || todayISO()}.pdf`;
+  showToast('กำลังสร้าง PDF...');
+
+  // buildPrintableHTML() produces a full standalone document.
+  // body has max-width:180mm — we render it in an iframe so the main-page
+  // CSS (Tailwind) cannot interfere.
+  const html = buildPrintableHTML();
+
+  // A4 @ 96dpi = 794px. Use that as iframe width so the browser lays out
+  // the document at its natural A4 size before html2canvas captures it.
+  const A4_W_PX = 794;   // 210mm @ 96dpi
   const PAGE_MARGIN_MM = 15;
 
-  const wrap = document.createElement('div');
-  wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:${RENDER_WIDTH_PX}px;background:#fff;z-index:-1;`;
-  const inner = document.createElement('div');
-  inner.style.cssText = `width:${RENDER_WIDTH_PX}px;padding:0;margin:0;background:#fff;color:#000;font-family:Sarabun,system-ui,sans-serif;font-size:13px;line-height:1.5;box-sizing:border-box;`;
-  inner.innerHTML = html;
-  wrap.appendChild(inner);
-  document.body.appendChild(wrap);
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_W_PX}px;height:1200px;border:0;background:#fff;z-index:-1;`;
+  document.body.appendChild(iframe);
 
-  if (document.fonts && document.fonts.ready) {
-    try { await document.fonts.ready; } catch(e) {}
-  }
-  await new Promise(r => setTimeout(r, 200));
+  const idoc = iframe.contentDocument;
+  idoc.open();
+  idoc.write(html);   // body's max-width:180mm is already in the <style>
+  idoc.close();
+
+  // Wait for fonts and layout to settle
+  try { if (idoc.fonts?.ready) await idoc.fonts.ready; } catch(e) {}
+  await new Promise(r => setTimeout(r, 400));
+
+  // Capture body — it is constrained to 180mm via CSS, no extra div needed
+  const target = idoc.body;
 
   try {
     if (typeof html2pdf === 'undefined') throw new Error('html2pdf library not loaded');
-    await html2pdf().from(inner).set({
-      margin: [PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM],
+    await html2pdf().from(target).set({
+      margin:   [PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM],
       filename,
-      image: { type: 'jpeg', quality: 0.98 },
+      image:    { type: 'jpeg', quality: 0.98 },
       html2canvas: {
-        scale: 2,
-        useCORS: true,
+        scale:           2,
+        useCORS:         true,
         letterRendering: true,
         backgroundColor: '#ffffff',
-        windowWidth: RENDER_WIDTH_PX,
-        width: RENDER_WIDTH_PX,
+        // Match the iframe width so html2canvas sees the correct layout
+        windowWidth:     A4_W_PX,
         scrollX: 0,
         scrollY: 0,
         logging: false,
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      jsPDF:    { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
       pagebreak: { mode: ['css', 'legacy'] }
     }).save();
     recordCase({ trigger: 'export_pdf' });
@@ -2253,9 +2426,11 @@ document.getElementById('btnExportPdf').onclick = async () => {
     console.error('PDF export error:', err);
     showToast('เกิดข้อผิดพลาด — ' + (err.message || 'ลองใหม่'));
   } finally {
-    if (wrap.parentNode) document.body.removeChild(wrap);
+    if (iframe.parentNode) document.body.removeChild(iframe);
   }
 };
+
+
 
 
 /* ============================================================
